@@ -25,18 +25,24 @@ Stronger submissions will usually show a visible attempt to improve the usabilit
 No prebuilt dataset is provided.  
 The candidate is expected to generate a CSV file locally and use it as the input to the visualizer.
 
+## Problematic Points
+For this assessment, a point should be treated as problematic if either of the following is true:
+- `abs(A - 50.0) > 5.0`
+- the direction implied by `roll`, `pitch`, and `yaw` is more than `5.0` degrees away from world `-z`
+
 ## Assignment
 The candidate shall:
 1. Run `generate_data.py` to create a CSV file.
 2. Inspect the generated data and understand its structure.
 3. Design and implement a visualizer for the generated data.
-4. Ensure that the resulting tool allows a user to navigate the point set and inspect per-point score and orientation information.
+4. Ensure that the resulting tool allows a user to navigate the point set, inspect per-point score and orientation information, and identify problematic points directly in the visualizer.
 
 ## Minimum Expectations
 The submitted solution should:
 - visualize the generated point data in a meaningful and usable manner
 - provide a way to navigate or explore the data
 - provide a way to inspect the score and orientation information for individual points
+- provide a way to identify and inspect problematic points directly in the visualizer
 - run locally with clear execution instructions
 
 ## Intentionally Unspecified Areas
