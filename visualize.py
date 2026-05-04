@@ -14,10 +14,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-# --------------------------------------------------------------------------- #
-# geometry helpers (mirrors generate_data.py)
-# --------------------------------------------------------------------------- #
-
+# geometry helpers (refs generate_data.py)
 def _rotation_matrix(roll_deg: float, pitch_deg: float, yaw_deg: float) -> list[list[float]]:
     r, p, y = math.radians(roll_deg), math.radians(pitch_deg), math.radians(yaw_deg)
     cr, sr = math.cos(r), math.sin(r)
@@ -42,9 +39,14 @@ def _tilt_from_neg_z(roll_deg: float, pitch_deg: float, yaw_deg: float) -> float
     return math.degrees(math.acos(cosine))
 
 
-# --------------------------------------------------------------------------- #
-# data loading
-# --------------------------------------------------------------------------- #
+def _local_axes(
+    roll_deg: float, pitch_deg: float, yaw_deg: float
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Return (local_x, local_y) as world-space vectors (columns 0 and 1 of R)."""
+    R = _rotation_matrix(roll_deg, pitch_deg, yaw_deg)
+    lx = (round(R[0][0], 4), round(R[1][0], 4), round(R[2][0], 4))
+    ly = (round(R[0][1], 4), round(R[1][1], 4), round(R[2][1], 4))
+    return lx, ly
 
 def load_points(csv_path: pathlib.Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
@@ -60,6 +62,7 @@ def load_points(csv_path: pathlib.Path) -> list[dict[str, Any]]:
 
             tilt = _tilt_from_neg_z(roll, pitch, yaw)
             fx, fy, fz = _forward(roll, pitch, yaw)
+            lx, ly = _local_axes(roll, pitch, yaw)
 
             a_err = abs(A - 50.0) > 5.0
             orient_err = tilt > 5.0
@@ -76,17 +79,14 @@ def load_points(csv_path: pathlib.Path) -> list[dict[str, Any]]:
                 "forward_x": round(fx, 4),
                 "forward_y": round(fy, 4),
                 "forward_z": round(fz, 4),
+                "local_x_x": lx[0], "local_x_y": lx[1], "local_x_z": lx[2],
+                "local_y_x": ly[0], "local_y_y": ly[1], "local_y_z": ly[2],
                 "a_error": a_err,
                 "orient_error": orient_err,
                 "problematic": problematic,
                 "layer": "circle" if z > 1.0 else "grid",
             })
     return rows
-
-
-# --------------------------------------------------------------------------- #
-# app
-# --------------------------------------------------------------------------- #
 
 app = FastAPI()
 _points: list[dict[str, Any]] = []
@@ -120,11 +120,6 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 @app.get("/")
 def index() -> FileResponse:
     return FileResponse("static/index.html")
-
-
-# --------------------------------------------------------------------------- #
-# entry point
-# --------------------------------------------------------------------------- #
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)

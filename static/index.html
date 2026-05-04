@@ -83,16 +83,19 @@
     border-bottom: 1px solid #30363d;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 7px;
   }
 
   #filters h2 {
-    font-size: 11px;
-    font-weight: 600;
+    font-size: 10px;
+    font-weight: 700;
     color: #8b949e;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.6px;
+    margin-top: 4px;
   }
+
+  #filters h2:first-child { margin-top: 0; }
 
   .filter-row {
     display: flex;
@@ -101,7 +104,7 @@
   }
 
   .filter-row label {
-    font-size: 13px;
+    font-size: 12px;
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -117,8 +120,13 @@
 
   .dot-ok   { background: #238636; }
   .dot-prob { background: #f85149; }
-  .dot-aerr { background: #d29922; }
-  .dot-oerr { background: #bc8cff; }
+
+  /* coloured dash for arrow-type legend swatches */
+  .sw {
+    width: 14px; height: 3px;
+    border-radius: 1.5px;
+    flex-shrink: 0;
+  }
 
   input[type=checkbox] { accent-color: #58a6ff; cursor: pointer; }
 
@@ -172,9 +180,8 @@
   .point-item:hover { background: #21262d; }
   .point-item.selected { background: #1f3a5f; border-color: #58a6ff; }
 
-  .point-item .pid { color: #8b949e; font-size: 11px; min-width: 28px; }
+  .point-item .pid  { color: #8b949e; font-size: 11px; min-width: 28px; }
   .point-item .ppos { flex: 1; color: #c9d1d9; }
-  .point-item .perr { font-size: 10px; }
 
   .badge {
     padding: 1px 5px;
@@ -192,9 +199,7 @@
     overflow: hidden;
   }
 
-  #canvas-container {
-    width: 100%; height: 100%;
-  }
+  #canvas-container { width: 100%; height: 100%; }
 
   /* detail panel */
   #detail-panel {
@@ -256,9 +261,9 @@
     border-radius: 10px;
     font-weight: 600;
   }
-  .flag-a   { background: rgba(210,153,34,0.2); color: #d29922; border: 1px solid #d29922; }
-  .flag-o   { background: rgba(188,140,255,0.2); color: #bc8cff; border: 1px solid #bc8cff; }
-  .flag-ok  { background: rgba(35,134,54,0.2); color: #3fb950; border: 1px solid #3fb950; }
+  .flag-a   { background: rgba(210,153,34,0.2);   color: #d29922; border: 1px solid #d29922; }
+  .flag-o   { background: rgba(188,140,255,0.2);  color: #bc8cff; border: 1px solid #bc8cff; }
+  .flag-ok  { background: rgba(35,134,54,0.2);    color: #3fb950; border: 1px solid #3fb950; }
 
   /* HUD bottom */
   #hud {
@@ -289,11 +294,22 @@
     backdrop-filter: blur(4px);
   }
 
-  #legend h4 { color: #8b949e; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+  #legend h4 {
+    color: #8b949e;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
 
   .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
   .legend-row:last-child { margin-bottom: 0; }
-  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-line { width: 14px; height: 3px; border-radius: 1.5px; flex-shrink: 0; }
+
+  /* tri-colour swatch for triad legend row */
+  .legend-tri { display: flex; gap: 1px; align-items: center; flex-shrink: 0; }
+  .legend-tri span { display: block; width: 4px; height: 10px; border-radius: 1px; }
 
   #point-count-hud {
     position: absolute;
@@ -342,10 +358,24 @@
       <label><input type="checkbox" id="f-prob" checked> <span class="dot dot-prob"></span> Problematic</label>
     </div>
     <div class="filter-row">
-      <label><input type="checkbox" id="f-arrows" checked> Show orientation arrows</label>
+      <label><input type="checkbox" id="f-grid" checked> Show grid planes</label>
+    </div>
+
+    <h2>Orientation overlays</h2>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-arrows" checked>
+        <span class="sw" style="background:#ff6b6b"></span> Actual forward</label>
     </div>
     <div class="filter-row">
-      <label><input type="checkbox" id="f-grid" checked> Show grid</label>
+      <label><input type="checkbox" id="f-nominal">
+        <span class="sw" style="background:#4a6080"></span> −Z reference</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-xyproj">
+        <span class="sw" style="background:#00bbcc"></span> XY azimuth projection</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-triad"> RGB triad on selection</label>
     </div>
   </div>
 
@@ -364,10 +394,24 @@
   <div id="legend">
     <h4>Legend</h4>
     <div class="legend-row"><div class="legend-dot" style="background:#2ea043"></div> Normal</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#f85149"></div> Problematic</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#d29922"></div> Score error only</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#bc8cff"></div> Orient error only</div>
-    <div class="legend-row"><div class="legend-dot" style="background:#ff6b6b; width:2px; height:10px; border-radius:1px;"></div> Fwd direction</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#f85149"></div> Both errors</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#d29922"></div> Score error</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#bc8cff"></div> Orient error</div>
+    <div class="legend-row"><div class="legend-line" style="background:#ff6b6b"></div> Actual forward</div>
+    <div class="legend-row" id="leg-nominal" style="display:none">
+      <div class="legend-line" style="background:#4a6080"></div> −Z reference
+    </div>
+    <div class="legend-row" id="leg-xyproj" style="display:none">
+      <div class="legend-line" style="background:#00bbcc"></div> XY azimuth
+    </div>
+    <div class="legend-row" id="leg-triad" style="display:none">
+      <div class="legend-tri">
+        <span style="background:#ff3333"></span>
+        <span style="background:#33cc33"></span>
+        <span style="background:#3388ff"></span>
+      </div>
+      Triad X · Y · Z
+    </div>
   </div>
 
   <div id="point-count-hud">Showing <span id="hud-visible">—</span> of <span id="hud-total">—</span> points</div>
@@ -403,44 +447,53 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 // ── state ──────────────────────────────────────────────────────────────────
 let allPoints = [];
 let selectedId = null;
-const meshById = new Map();   // id -> sphere mesh
-const arrowById = new Map();  // id -> arrow group
+
+const meshById    = new Map();  // id -> sphere mesh
+const arrowById   = new Map();  // id -> actual-forward arrow group
+const nominalById = new Map();  // id -> nominal -Z ArrowHelper
+const xyProjById  = new Map();  // id -> XY projection ArrowHelper
+
+let triadObject = null;  // ArrowHelper group for the currently selected point
 
 // ── Three.js setup ─────────────────────────────────────────────────────────
 const container = document.getElementById('canvas-container');
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer  = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(window.devicePixelRatio);
 renderer.setClearColor(0x0d1117);
 container.appendChild(renderer.domElement);
 
-const scene = new THREE.Scene();
+const scene  = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
 camera.position.set(0, -18, 12);
 camera.up.set(0, 0, 1);
 
 const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.dampingFactor = 0.08;
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.08;
 controls.target.set(0, 0, 1.5);
 controls.update();
 
-// ambient + directional light
 scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-const dir = new THREE.DirectionalLight(0xffffff, 1.0);
-dir.position.set(5, -10, 15);
-scene.add(dir);
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+sunLight.position.set(5, -10, 15);
+scene.add(sunLight);
 
-// ── grid helpers ───────────────────────────────────────────────────────────
+// ── grid planes ────────────────────────────────────────────────────────────
 const gridGroup = new THREE.Group();
 scene.add(gridGroup);
-const gridHelperZ0 = new THREE.GridHelper(12, 12, 0x21262d, 0x21262d);
-gridHelperZ0.rotation.x = Math.PI / 2;
-gridHelperZ0.position.z = 0;
-gridGroup.add(gridHelperZ0);
-const gridHelperZ3 = new THREE.GridHelper(12, 12, 0x21262d, 0x21262d);
-gridHelperZ3.rotation.x = Math.PI / 2;
-gridHelperZ3.position.z = 3;
-gridGroup.add(gridHelperZ3);
+[0, 3].forEach(z => {
+  const g = new THREE.GridHelper(12, 12, 0x21262d, 0x21262d);
+  g.rotation.x = Math.PI / 2;
+  g.position.z = z;
+  gridGroup.add(g);
+});
+
+// ── scene groups ───────────────────────────────────────────────────────────
+const pointsGroup  = new THREE.Group();
+const arrowsGroup  = new THREE.Group();
+const nominalGroup = new THREE.Group();
+const xyProjGroup  = new THREE.Group();
+scene.add(pointsGroup, arrowsGroup, nominalGroup, xyProjGroup);
 
 // ── colours ────────────────────────────────────────────────────────────────
 const COL = {
@@ -458,79 +511,136 @@ function pointColor(pt) {
   return COL.oerr;
 }
 
-// ── geometry pools ─────────────────────────────────────────────────────────
+// ── geometry shared ────────────────────────────────────────────────────────
 const sphereGeo = new THREE.SphereGeometry(0.12, 12, 8);
+const NEG_Z     = new THREE.Vector3(0, 0, -1);
 
-function buildArrow(pt) {
-  const group = new THREE.Group();
-  const fx = pt.forward_x, fy = pt.forward_y, fz = pt.forward_z;
+// ── arrow builders ─────────────────────────────────────────────────────────
 
-  const shaftLen = 0.55;
-  const shaftMat = new THREE.MeshBasicMaterial({ color: 0xff6b6b });
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, shaftLen, 6), shaftMat);
+// Thick 3D cylinder arrow — used for the main "actual forward" overlay.
+function buildActualArrow(pt) {
+  const group     = new THREE.Group();
+  const shaftLen  = 0.55;
+  const mat       = new THREE.MeshBasicMaterial({ color: 0xff6b6b });
+  const shaft     = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, shaftLen, 6), mat);
   shaft.position.y = shaftLen / 2;
-
-  const cone = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 6), shaftMat);
+  const cone      = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 6), mat);
   cone.position.y = shaftLen + 0.1;
+  group.add(shaft, cone);
 
-  group.add(shaft);
-  group.add(cone);
-
-  // default cylinder points up (Y+); we want it to point along (fx,fy,fz)
-  const up = new THREE.Vector3(0, 1, 0);
-  const dir = new THREE.Vector3(fx, fy, fz).normalize();
-  group.quaternion.setFromUnitVectors(up, dir);
+  const dir = new THREE.Vector3(pt.forward_x, pt.forward_y, pt.forward_z).normalize();
+  group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
   group.position.set(pt.x, pt.y, pt.z);
   return group;
 }
 
-// ── build scene from data ──────────────────────────────────────────────────
-const pointsGroup = new THREE.Group();
-const arrowsGroup = new THREE.Group();
-scene.add(pointsGroup);
-scene.add(arrowsGroup);
+// Thin ArrowHelper — used for all auxiliary overlays (nominal, XY, triad).
+function makeHelper(dir, origin, length, color, headLen = 0.13, headW = 0.07) {
+  return new THREE.ArrowHelper(dir.normalize(), origin, length, color, headLen, headW);
+}
 
+function buildNominalArrow(pt) {
+  const origin = new THREE.Vector3(pt.x, pt.y, pt.z);
+  const h      = makeHelper(NEG_Z.clone(), origin, 0.65, 0x4a6080);
+  h.userData.ptId = pt.id;
+  return h;
+}
+
+function buildXYArrow(pt) {
+  const fx = pt.forward_x, fy = pt.forward_y;
+  const mag = Math.sqrt(fx * fx + fy * fy);
+  if (mag < 0.025) return null;  // point is nearly vertical — no meaningful azimuth
+  const dir    = new THREE.Vector3(fx / mag, fy / mag, 0);
+  const origin = new THREE.Vector3(pt.x, pt.y, pt.z);
+  const h      = makeHelper(dir, origin, 0.45, 0x00bbcc, 0.11, 0.06);
+  h.userData.ptId = pt.id;
+  return h;
+}
+
+// Full local-frame triad shown only for the selected point.
+// X (red) = local right, Y (green) = local up-ish, Z (blue) = forward.
+// All three arms reveal how roll rotates the frame around the forward axis.
+function buildTriad(pt) {
+  const group  = new THREE.Group();
+  group.position.set(pt.x, pt.y, pt.z);
+  const origin = new THREE.Vector3(0, 0, 0);
+  const L = 0.5, HL = 0.13, HW = 0.07;
+
+  const xDir = new THREE.Vector3(pt.local_x_x, pt.local_x_y, pt.local_x_z);
+  const yDir = new THREE.Vector3(pt.local_y_x, pt.local_y_y, pt.local_y_z);
+  const zDir = new THREE.Vector3(pt.forward_x,  pt.forward_y,  pt.forward_z);
+
+  group.add(makeHelper(xDir, origin, L, 0xff3333, HL, HW));  // X — red
+  group.add(makeHelper(yDir, origin, L, 0x33cc33, HL, HW));  // Y — green
+  group.add(makeHelper(zDir, origin, L, 0x3388ff, HL, HW));  // Z — blue
+  return group;
+}
+
+// ── build scene ────────────────────────────────────────────────────────────
 function buildScene(points) {
   pointsGroup.clear();
   arrowsGroup.clear();
+  nominalGroup.clear();
+  xyProjGroup.clear();
   meshById.clear();
   arrowById.clear();
+  nominalById.clear();
+  xyProjById.clear();
 
   for (const pt of points) {
-    const mat = new THREE.MeshLambertMaterial({ color: pointColor(pt) });
+    const mat  = new THREE.MeshLambertMaterial({ color: pointColor(pt) });
     const mesh = new THREE.Mesh(sphereGeo, mat);
     mesh.position.set(pt.x, pt.y, pt.z);
     mesh.userData.ptId = pt.id;
     pointsGroup.add(mesh);
     meshById.set(pt.id, mesh);
 
-    const arrow = buildArrow(pt);
+    const arrow = buildActualArrow(pt);
     arrow.userData.ptId = pt.id;
     arrowsGroup.add(arrow);
     arrowById.set(pt.id, arrow);
+
+    const nominal = buildNominalArrow(pt);
+    nominalGroup.add(nominal);
+    nominalById.set(pt.id, nominal);
+
+    const xyArrow = buildXYArrow(pt);
+    if (xyArrow) {
+      xyProjGroup.add(xyArrow);
+      xyProjById.set(pt.id, xyArrow);
+    }
   }
 }
 
 // ── raycaster for picking ──────────────────────────────────────────────────
 const raycaster = new THREE.Raycaster();
-raycaster.params.Mesh.threshold = 0.1;
-const mouse = new THREE.Vector2();
+const mouse     = new THREE.Vector2();
 
-renderer.domElement.addEventListener('click', (e) => {
+renderer.domElement.addEventListener('click', e => {
   const rect = renderer.domElement.getBoundingClientRect();
-  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
+  mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
   raycaster.setFromCamera(mouse, camera);
   const hits = raycaster.intersectObjects(pointsGroup.children);
-  if (hits.length > 0) {
-    selectPoint(hits[0].object.userData.ptId);
-  }
+  if (hits.length) selectPoint(hits[0].object.userData.ptId);
 });
+
+// ── triad helpers ──────────────────────────────────────────────────────────
+function clearTriad() {
+  if (triadObject) { scene.remove(triadObject); triadObject = null; }
+}
+
+function spawnTriad(pt) {
+  clearTriad();
+  if (document.getElementById('f-triad').checked) {
+    triadObject = buildTriad(pt);
+    scene.add(triadObject);
+  }
+}
 
 // ── selection ─────────────────────────────────────────────────────────────
 function selectPoint(id) {
-  // deselect old
+  // restore previous selection colour
   if (selectedId !== null) {
     const old = allPoints.find(p => p.id === selectedId);
     if (old) {
@@ -539,6 +649,7 @@ function selectPoint(id) {
     }
     document.querySelectorAll('.point-item').forEach(el => el.classList.remove('selected'));
   }
+  clearTriad();
 
   selectedId = id;
   const pt = allPoints.find(p => p.id === id);
@@ -547,7 +658,8 @@ function selectPoint(id) {
   const mesh = meshById.get(id);
   if (mesh) mesh.material.color.copy(COL.sel);
 
-  // highlight list item
+  spawnTriad(pt);
+
   const listEl = document.getElementById(`li-${id}`);
   if (listEl) {
     listEl.classList.add('selected');
@@ -557,29 +669,43 @@ function selectPoint(id) {
   showDetail(pt);
 }
 
+function deselect() {
+  clearTriad();
+  document.getElementById('detail-panel').classList.remove('visible');
+  if (selectedId !== null) {
+    const old = allPoints.find(p => p.id === selectedId);
+    if (old) {
+      const m = meshById.get(selectedId);
+      if (m) m.material.color.copy(pointColor(old));
+    }
+    selectedId = null;
+  }
+  document.querySelectorAll('.point-item').forEach(el => el.classList.remove('selected'));
+}
+
 // ── detail panel ──────────────────────────────────────────────────────────
 function showDetail(pt) {
-  document.getElementById('dp-id').textContent = `#${pt.id}`;
+  document.getElementById('dp-id').textContent  = `#${pt.id}`;
   document.getElementById('dp-pos').textContent = `(${pt.x.toFixed(3)}, ${pt.y.toFixed(3)}, ${pt.z.toFixed(3)})`;
   document.getElementById('dp-layer').textContent = pt.layer;
 
   const adelta = Math.abs(pt.A - 50.0);
-  const aEl = document.getElementById('dp-a');
+  const aEl  = document.getElementById('dp-a');
   const adEl = document.getElementById('dp-adelta');
-  aEl.textContent = pt.A.toFixed(4);
-  aEl.className = `dv ${pt.a_error ? 'err' : 'ok'}`;
+  aEl.textContent  = pt.A.toFixed(4);
+  aEl.className    = `dv ${pt.a_error ? 'err' : 'ok'}`;
   adEl.textContent = adelta.toFixed(4);
-  adEl.className = `dv ${pt.a_error ? 'err' : 'ok'}`;
+  adEl.className   = `dv ${pt.a_error ? 'err' : 'ok'}`;
 
-  document.getElementById('dp-roll').textContent = `${pt.roll_deg.toFixed(2)}°`;
+  document.getElementById('dp-roll').textContent  = `${pt.roll_deg.toFixed(2)}°`;
   document.getElementById('dp-pitch').textContent = `${pt.pitch_deg.toFixed(2)}°`;
-  document.getElementById('dp-yaw').textContent = `${pt.yaw_deg.toFixed(2)}°`;
+  document.getElementById('dp-yaw').textContent   = `${pt.yaw_deg.toFixed(2)}°`;
 
   const tiltEl = document.getElementById('dp-tilt');
   tiltEl.textContent = `${pt.tilt_deg.toFixed(2)}°`;
-  tiltEl.className = `dv ${pt.orient_error ? 'err' : 'ok'}`;
+  tiltEl.className   = `dv ${pt.orient_error ? 'err' : 'ok'}`;
 
-  const flagsEl = document.getElementById('dp-flags');
+  const flagsEl  = document.getElementById('dp-flags');
   flagsEl.innerHTML = '';
   if (!pt.problematic) {
     flagsEl.innerHTML = '<span class="flag-badge flag-ok">✓ OK</span>';
@@ -591,29 +717,18 @@ function showDetail(pt) {
   document.getElementById('detail-panel').classList.add('visible');
 }
 
-document.getElementById('detail-close').addEventListener('click', () => {
-  document.getElementById('detail-panel').classList.remove('visible');
-  if (selectedId !== null) {
-    const old = allPoints.find(p => p.id === selectedId);
-    if (old) {
-      const m = meshById.get(selectedId);
-      if (m) m.material.color.copy(pointColor(old));
-    }
-    selectedId = null;
-  }
-  document.querySelectorAll('.point-item').forEach(el => el.classList.remove('selected'));
-});
+document.getElementById('detail-close').addEventListener('click', deselect);
 
 // ── sidebar list ──────────────────────────────────────────────────────────
 function buildList(points) {
-  const container = document.getElementById('point-list');
-  const search = document.getElementById('list-search').value.toLowerCase();
-  const showOk = document.getElementById('f-ok').checked;
-  const showProb = document.getElementById('f-prob').checked;
+  const listContainer = document.getElementById('point-list');
+  const search        = document.getElementById('list-search').value.toLowerCase();
+  const showOk        = document.getElementById('f-ok').checked;
+  const showProb      = document.getElementById('f-prob').checked;
 
   const filtered = points.filter(pt => {
-    if (pt.problematic && !showProb) return false;
-    if (!pt.problematic && !showOk) return false;
+    if (pt.problematic  && !showProb) return false;
+    if (!pt.problematic && !showOk)   return false;
     if (search) {
       const s = `${pt.id} ${pt.x} ${pt.y} ${pt.z} ${pt.layer}`.toLowerCase();
       if (!s.includes(search)) return false;
@@ -622,7 +737,7 @@ function buildList(points) {
   });
 
   document.getElementById('list-count').textContent = filtered.length;
-  container.innerHTML = '';
+  listContainer.innerHTML = '';
 
   for (const pt of filtered) {
     const el = document.createElement('div');
@@ -640,27 +755,32 @@ function buildList(points) {
     `;
     el.addEventListener('click', () => {
       selectPoint(pt.id);
-      // fly camera near point
       controls.target.set(pt.x, pt.y, pt.z);
       controls.update();
     });
-    container.appendChild(el);
+    listContainer.appendChild(el);
   }
 }
 
-// ── filter/visibility ─────────────────────────────────────────────────────
+// ── visibility ─────────────────────────────────────────────────────────────
 function applyVisibility() {
-  const showOk   = document.getElementById('f-ok').checked;
-  const showProb = document.getElementById('f-prob').checked;
-  const showArrows = document.getElementById('f-arrows').checked;
+  const showOk      = document.getElementById('f-ok').checked;
+  const showProb    = document.getElementById('f-prob').checked;
+  const showArrows  = document.getElementById('f-arrows').checked;
+  const showNominal = document.getElementById('f-nominal').checked;
+  const showXY      = document.getElementById('f-xyproj').checked;
 
   let visible = 0;
   for (const pt of allPoints) {
-    const show = pt.problematic ? showProb : showOk;
-    const mesh = meshById.get(pt.id);
-    const arrow = arrowById.get(pt.id);
-    if (mesh)  mesh.visible  = show;
-    if (arrow) arrow.visible = show && showArrows;
+    const show    = pt.problematic ? showProb : showOk;
+    const mesh    = meshById.get(pt.id);
+    const arrow   = arrowById.get(pt.id);
+    const nominal = nominalById.get(pt.id);
+    const xyArrow = xyProjById.get(pt.id);
+    if (mesh)    mesh.visible    = show;
+    if (arrow)   arrow.visible   = show && showArrows;
+    if (nominal) nominal.visible = show && showNominal;
+    if (xyArrow) xyArrow.visible = show && showXY;
     if (show) visible++;
   }
 
@@ -668,10 +788,37 @@ function applyVisibility() {
   buildList(allPoints);
 }
 
-['f-ok','f-prob','f-arrows','f-grid'].forEach(id => {
-  document.getElementById(id).addEventListener('change', () => {
+// ── legend sync ────────────────────────────────────────────────────────────
+function syncLegend() {
+  document.getElementById('leg-nominal').style.display =
+    document.getElementById('f-nominal').checked ? '' : 'none';
+  document.getElementById('leg-xyproj').style.display =
+    document.getElementById('f-xyproj').checked ? '' : 'none';
+  document.getElementById('leg-triad').style.display =
+    document.getElementById('f-triad').checked ? '' : 'none';
+}
+
+// ── event listeners ────────────────────────────────────────────────────────
+
+// Triad checkbox: rebuild/remove triad for current selection immediately.
+document.getElementById('f-triad').addEventListener('change', () => {
+  if (selectedId !== null) {
+    const pt = allPoints.find(p => p.id === selectedId);
+    if (document.getElementById('f-triad').checked && pt) {
+      spawnTriad(pt);
+    } else {
+      clearTriad();
+    }
+  }
+  syncLegend();
+});
+
+// All other display/overlay checkboxes.
+['f-ok', 'f-prob', 'f-grid', 'f-arrows', 'f-nominal', 'f-xyproj'].forEach(cbId => {
+  document.getElementById(cbId).addEventListener('change', () => {
     gridGroup.visible = document.getElementById('f-grid').checked;
     applyVisibility();
+    syncLegend();
   });
 });
 
@@ -683,17 +830,18 @@ async function init() {
     fetch('/api/points'),
     fetch('/api/stats'),
   ]);
-  allPoints = await pointsRes.json();
-  const stats = await statsRes.json();
+  allPoints       = await pointsRes.json();
+  const stats     = await statsRes.json();
 
-  document.getElementById('s-total').textContent  = stats.total;
-  document.getElementById('s-prob').textContent   = stats.problematic;
-  document.getElementById('s-aerr').textContent   = stats.a_error_only + stats.both_errors;
-  document.getElementById('s-oerr').textContent   = stats.orient_error_only + stats.both_errors;
+  document.getElementById('s-total').textContent   = stats.total;
+  document.getElementById('s-prob').textContent    = stats.problematic;
+  document.getElementById('s-aerr').textContent    = stats.a_error_only + stats.both_errors;
+  document.getElementById('s-oerr').textContent    = stats.orient_error_only + stats.both_errors;
   document.getElementById('hud-total').textContent = stats.total;
 
   buildScene(allPoints);
   applyVisibility();
+  syncLegend();
 }
 
 init();
