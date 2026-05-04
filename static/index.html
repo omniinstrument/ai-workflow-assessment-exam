@@ -134,8 +134,10 @@
   #list-header {
     padding: 10px 16px 6px;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
+    gap: 6px;
   }
 
   #list-header h2 {
@@ -153,11 +155,29 @@
     font-size: 12px;
     padding: 4px 8px;
     border-radius: 4px;
-    width: 100px;
+    flex: 1 1 148px;
+    min-width: 120px;
+    max-width: 220px;
     outline: none;
   }
 
   #list-search:focus { border-color: #58a6ff; }
+
+  #list-search-hint {
+    width: 100%;
+    margin: 0 0 2px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #6e7681;
+  }
+
+  #list-search-hint code {
+    font-size: 10px;
+    background: #21262d;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #c9d1d9;
+  }
 
   #point-list {
     flex: 1;
@@ -381,7 +401,9 @@
 
   <div id="list-header">
     <h2>Points (<span id="list-count">0</span>)</h2>
-    <input type="text" id="list-search" placeholder="Filter…">
+    <input type="text" id="list-search" placeholder="x=-2.777778, grid, #12…"
+      title="Axis: x=-2.777778 or x -2.777778 or z axis 3. Combine: x=-2 y=0 grid">
+    <p id="list-search-hint">Axis match: <code>x=-2.777778</code> <code>y:0</code> <code>z axis 3</code> · optional text filters id, layer, <code>A</code></p>
   </div>
 
   <div id="point-list"></div>
@@ -719,20 +741,51 @@ function showDetail(pt) {
 
 document.getElementById('detail-close').addEventListener('click', deselect);
 
+// ── point list search (axis predicates + free text) ───────────────────────
+const COORD_MATCH_EPS = 1e-4;
+
+/** e.g. x=-2.777778, x -2.777778, y:0, z axis 3 — strip from query for text pass */
+const AXIS_SEARCH_RE = /\b([xyz])\s*(?::|=\s*|axis\s+)?\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)\b/gi;
+
+function parsePointSearchQuery(query) {
+  const predicates = [];
+  const withoutAxes = query.replace(AXIS_SEARCH_RE, (_, axis, numStr) => {
+    predicates.push({ axis: axis.toLowerCase(), value: parseFloat(numStr) });
+    return ' ';
+  });
+  const text = withoutAxes.replace(/\s+/g, ' ').trim();
+  return { predicates, text };
+}
+
+function searchMatchesPoint(pt, queryRaw) {
+  const raw = queryRaw.trim();
+  if (!raw) return true;
+  const { predicates, text } = parsePointSearchQuery(raw);
+  for (const p of predicates) {
+    const coord = p.axis === 'x' ? pt.x : p.axis === 'y' ? pt.y : pt.z;
+    if (!Number.isFinite(p.value) || Math.abs(coord - p.value) > COORD_MATCH_EPS) {
+      return false;
+    }
+  }
+  if (text) {
+    const needle = text.toLowerCase();
+    const hay = `${pt.id} ${pt.x} ${pt.y} ${pt.z} ${pt.layer} ${pt.A}`.toLowerCase();
+    if (!hay.includes(needle)) return false;
+  }
+  return true;
+}
+
 // ── sidebar list ──────────────────────────────────────────────────────────
 function buildList(points) {
   const listContainer = document.getElementById('point-list');
-  const search        = document.getElementById('list-search').value.toLowerCase();
+  const searchRaw     = document.getElementById('list-search').value;
   const showOk        = document.getElementById('f-ok').checked;
   const showProb      = document.getElementById('f-prob').checked;
 
   const filtered = points.filter(pt => {
     if (pt.problematic  && !showProb) return false;
     if (!pt.problematic && !showOk)   return false;
-    if (search) {
-      const s = `${pt.id} ${pt.x} ${pt.y} ${pt.z} ${pt.layer}`.toLowerCase();
-      if (!s.includes(search)) return false;
-    }
+    if (!searchMatchesPoint(pt, searchRaw)) return false;
     return true;
   });
 
@@ -769,10 +822,12 @@ function applyVisibility() {
   const showArrows  = document.getElementById('f-arrows').checked;
   const showNominal = document.getElementById('f-nominal').checked;
   const showXY      = document.getElementById('f-xyproj').checked;
+  const searchRaw   = document.getElementById('list-search').value;
 
   let visible = 0;
   for (const pt of allPoints) {
-    const show    = pt.problematic ? showProb : showOk;
+    const showCat = pt.problematic ? showProb : showOk;
+    const show    = showCat && searchMatchesPoint(pt, searchRaw);
     const mesh    = meshById.get(pt.id);
     const arrow   = arrowById.get(pt.id);
     const nominal = nominalById.get(pt.id);
@@ -822,7 +877,7 @@ document.getElementById('f-triad').addEventListener('change', () => {
   });
 });
 
-document.getElementById('list-search').addEventListener('input', () => buildList(allPoints));
+document.getElementById('list-search').addEventListener('input', () => applyVisibility());
 
 // ── load data ─────────────────────────────────────────────────────────────
 async function init() {
