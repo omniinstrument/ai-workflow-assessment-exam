@@ -454,6 +454,9 @@
   <div id="hud">Scroll to zoom · Drag to orbit · Right-drag to pan · Click point to inspect</div>
 </div>
 
+<script type="application/json" id="pcv-embed-points"></script>
+<script type="application/json" id="pcv-embed-stats"></script>
+
 <script type="importmap">
 {
   "imports": {
@@ -881,12 +884,22 @@ document.getElementById('list-search').addEventListener('input', () => applyVisi
 
 // ── load data ─────────────────────────────────────────────────────────────
 async function init() {
-  const [pointsRes, statsRes] = await Promise.all([
-    fetch('/api/points'),
-    fetch('/api/stats'),
-  ]);
-  allPoints       = await pointsRes.json();
-  const stats     = await statsRes.json();
+  const embPts = document.getElementById('pcv-embed-points');
+  const embSt  = document.getElementById('pcv-embed-stats');
+  const rawPts = embPts?.textContent?.trim() ?? '';
+  let stats;
+
+  if (rawPts) {
+    allPoints = JSON.parse(rawPts);
+    stats = JSON.parse(embSt.textContent.trim());
+  } else {
+    const [pointsRes, statsRes] = await Promise.all([
+      fetch('/api/points'),
+      fetch('/api/stats'),
+    ]);
+    allPoints = await pointsRes.json();
+    stats = await statsRes.json();
+  }
 
   document.getElementById('s-total').textContent   = stats.total;
   document.getElementById('s-prob').textContent    = stats.problematic;

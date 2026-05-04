@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Point Cloud Visualizer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: #0d1117;
+    color: #e6edf3;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── sidebar ── */
+  #sidebar {
+    width: 300px;
+    min-width: 300px;
+    background: #161b22;
+    border-right: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #sidebar-header {
+    padding: 16px;
+    border-bottom: 1px solid #30363d;
+  }
+
+  #sidebar-header h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #58a6ff;
+    margin-bottom: 4px;
+  }
+
+  #sidebar-header p {
+    font-size: 12px;
+    color: #8b949e;
+  }
+
+  /* stats strip */
+  #stats-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #30363d;
+  }
+
+  .stat-card {
+    background: #0d1117;
+    border-radius: 6px;
+    padding: 8px 10px;
+    border: 1px solid #30363d;
+  }
+
+  .stat-card .label {
+    font-size: 10px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stat-card .value {
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 2px;
+  }
+
+  .stat-card.total .value  { color: #58a6ff; }
+  .stat-card.prob .value   { color: #f85149; }
+  .stat-card.aerr .value   { color: #d29922; }
+  .stat-card.oerr .value   { color: #bc8cff; }
+
+  /* filter controls */
+  #filters {
+    padding: 12px 16px;
+    border-bottom: 1px solid #30363d;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  #filters h2 {
+    font-size: 10px;
+    font-weight: 700;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-top: 4px;
+  }
+
+  #filters h2:first-child { margin-top: 0; }
+
+  .filter-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-row label {
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+  }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot-ok   { background: #238636; }
+  .dot-prob { background: #f85149; }
+
+  /* coloured dash for arrow-type legend swatches */
+  .sw {
+    width: 14px; height: 3px;
+    border-radius: 1.5px;
+    flex-shrink: 0;
+  }
+
+  input[type=checkbox] { accent-color: #58a6ff; cursor: pointer; }
+
+  /* point list */
+  #list-header {
+    padding: 10px 16px 6px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  #list-header h2 {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #list-search {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    color: #e6edf3;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    flex: 1 1 148px;
+    min-width: 120px;
+    max-width: 220px;
+    outline: none;
+  }
+
+  #list-search:focus { border-color: #58a6ff; }
+
+  #list-search-hint {
+    width: 100%;
+    margin: 0 0 2px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: #6e7681;
+  }
+
+  #list-search-hint code {
+    font-size: 10px;
+    background: #21262d;
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: #c9d1d9;
+  }
+
+  #point-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 8px 8px;
+  }
+
+  .point-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    border: 1px solid transparent;
+    margin-bottom: 2px;
+  }
+
+  .point-item:hover { background: #21262d; }
+  .point-item.selected { background: #1f3a5f; border-color: #58a6ff; }
+
+  .point-item .pid  { color: #8b949e; font-size: 11px; min-width: 28px; }
+  .point-item .ppos { flex: 1; color: #c9d1d9; }
+
+  .badge {
+    padding: 1px 5px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+  }
+  .badge-ok   { background: #238636; color: #fff; }
+  .badge-prob { background: #da3633; color: #fff; }
+
+  /* ── viewport ── */
+  #viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #canvas-container { width: 100%; height: 100%; }
+
+  /* detail panel */
+  #detail-panel {
+    position: absolute;
+    top: 12px; right: 12px;
+    width: 240px;
+    background: rgba(22,27,34,0.95);
+    border: 1px solid #30363d;
+    border-radius: 8px;
+    padding: 14px;
+    backdrop-filter: blur(4px);
+    display: none;
+  }
+
+  #detail-panel.visible { display: block; }
+
+  #detail-panel h3 {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #58a6ff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  #detail-close {
+    cursor: pointer;
+    color: #8b949e;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+  }
+  #detail-close:hover { color: #e6edf3; }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    padding: 3px 0;
+    border-bottom: 1px solid #21262d;
+  }
+  .detail-row:last-child { border-bottom: none; }
+  .detail-row .dk { color: #8b949e; }
+  .detail-row .dv { color: #e6edf3; font-weight: 500; }
+  .detail-row .dv.err { color: #f85149; }
+  .detail-row .dv.ok  { color: #3fb950; }
+
+  .detail-flags {
+    margin-top: 8px;
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .flag-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .flag-a   { background: rgba(210,153,34,0.2);   color: #d29922; border: 1px solid #d29922; }
+  .flag-o   { background: rgba(188,140,255,0.2);  color: #bc8cff; border: 1px solid #bc8cff; }
+  .flag-ok  { background: rgba(35,134,54,0.2);    color: #3fb950; border: 1px solid #3fb950; }
+
+  /* HUD bottom */
+  #hud {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(22,27,34,0.85);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 11px;
+    color: #8b949e;
+    backdrop-filter: blur(4px);
+    white-space: nowrap;
+  }
+
+  /* legend top-left */
+  #legend {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(22,27,34,0.85);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-size: 11px;
+    backdrop-filter: blur(4px);
+  }
+
+  #legend h4 {
+    color: #8b949e;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+
+  .legend-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .legend-row:last-child { margin-bottom: 0; }
+  .legend-dot  { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .legend-line { width: 14px; height: 3px; border-radius: 1.5px; flex-shrink: 0; }
+
+  /* tri-colour swatch for triad legend row */
+  .legend-tri { display: flex; gap: 1px; align-items: center; flex-shrink: 0; }
+  .legend-tri span { display: block; width: 4px; height: 10px; border-radius: 1px; }
+
+  #point-count-hud {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(22,27,34,0.85);
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    color: #8b949e;
+    backdrop-filter: blur(4px);
+  }
+
+  #point-count-hud span { color: #e6edf3; font-weight: 600; }
+
+  /* scrollbar */
+  #point-list::-webkit-scrollbar { width: 4px; }
+  #point-list::-webkit-scrollbar-track { background: transparent; }
+  #point-list::-webkit-scrollbar-thumb { background: #30363d; border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- ===== sidebar ===== -->
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>Point Cloud Visualizer</h1>
+    <p id="csv-name">synthetic_points.csv</p>
+  </div>
+
+  <div id="stats-strip">
+    <div class="stat-card total"><div class="label">Total</div><div class="value" id="s-total">—</div></div>
+    <div class="stat-card prob"><div class="label">Problematic</div><div class="value" id="s-prob">—</div></div>
+    <div class="stat-card aerr"><div class="label">Score err</div><div class="value" id="s-aerr">—</div></div>
+    <div class="stat-card oerr"><div class="label">Orient err</div><div class="value" id="s-oerr">—</div></div>
+  </div>
+
+  <div id="filters">
+    <h2>Display</h2>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-ok" checked> <span class="dot dot-ok"></span> Normal points</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-prob" checked> <span class="dot dot-prob"></span> Problematic</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-grid" checked> Show grid planes</label>
+    </div>
+
+    <h2>Orientation overlays</h2>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-arrows" checked>
+        <span class="sw" style="background:#ff6b6b"></span> Actual forward</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-nominal">
+        <span class="sw" style="background:#4a6080"></span> −Z reference</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-xyproj">
+        <span class="sw" style="background:#00bbcc"></span> XY azimuth projection</label>
+    </div>
+    <div class="filter-row">
+      <label><input type="checkbox" id="f-triad"> RGB triad on selection</label>
+    </div>
+  </div>
+
+  <div id="list-header">
+    <h2>Points (<span id="list-count">0</span>)</h2>
+    <input type="text" id="list-search" placeholder="x=-2.777778, grid, #12…"
+      title="Axis: x=-2.777778 or x -2.777778 or z axis 3. Combine: x=-2 y=0 grid">
+    <p id="list-search-hint">Axis match: <code>x=-2.777778</code> <code>y:0</code> <code>z axis 3</code> · optional text filters id, layer, <code>A</code></p>
+  </div>
+
+  <div id="point-list"></div>
+</div>
+
+<!-- ===== viewport ===== -->
+<div id="viewport">
+  <div id="canvas-container"></div>
+
+  <div id="legend">
+    <h4>Legend</h4>
+    <div class="legend-row"><div class="legend-dot" style="background:#2ea043"></div> Normal</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#f85149"></div> Both errors</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#d29922"></div> Score error</div>
+    <div class="legend-row"><div class="legend-dot" style="background:#bc8cff"></div> Orient error</div>
+    <div class="legend-row"><div class="legend-line" style="background:#ff6b6b"></div> Actual forward</div>
+    <div class="legend-row" id="leg-nominal" style="display:none">
+      <div class="legend-line" style="background:#4a6080"></div> −Z reference
+    </div>
+    <div class="legend-row" id="leg-xyproj" style="display:none">
+      <div class="legend-line" style="background:#00bbcc"></div> XY azimuth
+    </div>
+    <div class="legend-row" id="leg-triad" style="display:none">
+      <div class="legend-tri">
+        <span style="background:#ff3333"></span>
+        <span style="background:#33cc33"></span>
+        <span style="background:#3388ff"></span>
+      </div>
+      Triad X · Y · Z
+    </div>
+  </div>
+
+  <div id="point-count-hud">Showing <span id="hud-visible">—</span> of <span id="hud-total">—</span> points</div>
+
+  <div id="detail-panel">
+    <h3>Point <span id="dp-id"></span> <span id="detail-close">✕</span></h3>
+    <div class="detail-row"><span class="dk">Position</span><span class="dv" id="dp-pos"></span></div>
+    <div class="detail-row"><span class="dk">Layer</span><span class="dv" id="dp-layer"></span></div>
+    <div class="detail-row"><span class="dk">Score (A)</span><span class="dv" id="dp-a"></span></div>
+    <div class="detail-row"><span class="dk">|A − 50|</span><span class="dv" id="dp-adelta"></span></div>
+    <div class="detail-row"><span class="dk">Roll</span><span class="dv" id="dp-roll"></span></div>
+    <div class="detail-row"><span class="dk">Pitch</span><span class="dv" id="dp-pitch"></span></div>
+    <div class="detail-row"><span class="dk">Yaw</span><span class="dv" id="dp-yaw"></span></div>
+    <div class="detail-row"><span class="dk">Tilt from −Z</span><span class="dv" id="dp-tilt"></span></div>
+    <div class="detail-flags" id="dp-flags"></div>
+  </div>
+
+  <div id="hud">Scroll to zoom · Drag to orbit · Right-drag to pan · Click point to inspect</div>
+</div>
+
+<script type="application/json" id="pcv-embed-points">[{"id":0,"x":-5.0,"y":-5.0,"z":0.0,"A":51.8553,"roll_deg":-179.6433,"pitch_deg":-0.8951,"yaw_deg":2.5216,"tilt_deg":0.9635,"forward_x":0.0153,"forward_y":0.0069,"forward_z":-0.9999,"local_x_x":0.9989,"local_x_y":0.044,"local_x_z":0.0156,"local_y_x":0.0441,"local_y_y":-0.999,"local_y_z":-0.0062,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":1,"x":-5.0,"y":-3.888889,"z":0.0,"A":47.0061,"roll_deg":-179.5598,"pitch_deg":3.2343,"yaw_deg":-0.1711,"tilt_deg":3.2641,"forward_x":-0.0564,"forward_y":0.0079,"forward_z":-0.9984,"local_x_x":0.9984,"local_x_y":-0.003,"local_x_z":-0.0564,"local_y_x":-0.0034,"local_y_y":-1.0,"local_y_z":-0.0077,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":2,"x":-5.0,"y":-2.777778,"z":0.0,"A":50.2214,"roll_deg":-176.332,"pitch_deg":9.2647,"yaw_deg":2.5775,"tilt_deg":9.9585,"forward_x":-0.1634,"forward_y":0.0567,"forward_z":-0.9849,"local_x_x":0.986,"local_x_y":0.0444,"local_x_z":-0.161,"local_y_x":0.0346,"local_y_y":-0.9974,"local_y_z":-0.0631,"a_error":false,"orient_error":true,"problematic":true,"layer":"grid"},{"id":3,"x":-5.0,"y":-1.666667,"z":0.0,"A":52.0421,"roll_deg":-179.5673,"pitch_deg":2.3875,"yaw_deg":-2.5533,"tilt_deg":2.4264,"forward_x":-0.0413,"forward_y":0.0094,"forward_z":-0.9991,"local_x_x":0.9981,"local_x_y":-0.0445,"local_x_z":-0.0417,"local_y_x":-0.0449,"local_y_y":-0.999,"local_y_z":-0.0075,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":4,"x":-5.0,"y":-0.555556,"z":0.0,"A":51.3735,"roll_deg":-177.3216,"pitch_deg":-0.664,"yaw_deg":0.5756,"tilt_deg":2.7595,"forward_x":0.0111,"forward_y":0.0468,"forward_z":-0.9988,"local_x_x":0.9999,"local_x_y":0.01,"local_x_z":0.0116,"local_y_x":0.0106,"local_y_y":-0.9989,"local_y_z":-0.0467,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":5,"x":-5.0,"y":0.555556,"z":0.0,"A":47.9832,"roll_deg":-179.1127,"pitch_deg":1.2016,"yaw_deg":0.3097,"tilt_deg":1.4937,"forward_x":-0.0211,"forward_y":0.0154,"forward_z":-0.9997,"local_x_x":0.9998,"local_x_y":0.0054,"local_x_z":-0.021,"local_y_x":0.0051,"local_y_y":-0.9999,"local_y_z":-0.0155,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":6,"x":-5.0,"y":1.666667,"z":0.0,"A":50.7075,"roll_deg":179.9648,"pitch_deg":0.2537,"yaw_deg":-0.3237,"tilt_deg":0.2561,"forward_x":-0.0044,"forward_y":-0.0006,"forward_z":-1.0,"local_x_x":1.0,"local_x_y":-0.0056,"local_x_z":-0.0044,"local_y_x":-0.0056,"local_y_y":-1.0,"local_y_z":0.0006,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":7,"x":-5.0,"y":2.777778,"z":0.0,"A":46.5392,"roll_deg":-179.9726,"pitch_deg":-0.0088,"yaw_deg":2.6468,"tilt_deg":0.0288,"forward_x":0.0001,"forward_y":0.0005,"forward_z":-1.0,"local_x_x":0.9989,"local_x_y":0.0462,"local_x_z":0.0002,"local_y_x":0.0462,"local_y_y":-0.9989,"local_y_z":-0.0005,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":8,"x":-5.0,"y":3.888889,"z":0.0,"A":48.2278,"roll_deg":179.8901,"pitch_deg":-0.061,"yaw_deg":-0.0848,"tilt_deg":0.1257,"forward_x":0.0011,"forward_y":-0.0019,"forward_z":-1.0,"local_x_x":1.0,"local_x_y":-0.0015,"local_x_z":0.0011,"local_y_x":-0.0015,"local_y_y":-1.0,"local_y_z":0.0019,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":9,"x":-5.0,"y":5.0,"z":0.0,"A":53.0591,"roll_deg":-179.4818,"pitch_deg":-1.8713,"yaw_deg":-1.3564,"tilt_deg":1.9417,"forward_x":0.0329,"forward_y":0.0083,"forward_z":-0.9994,"local_x_x":0.9992,"local_x_y":-0.0237,"local_x_z":0.0327,"local_y_x":-0.0234,"local_y_y":-0.9997,"local_y_z":-0.009,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":10,"x":-3.888889,"y":-5.0,"z":0.0,"A":49.2565,"roll_deg":177.6977,"pitch_deg":0.1078,"yaw_deg":0.158,"tilt_deg":2.3048,"forward_x":-0.0018,"forward_y":-0.0402,"forward_z":-0.9992,"local_x_x":1.0,"local_x_y":0.0028,"local_x_z":-0.0019,"local_y_x":0.0028,"local_y_y":-0.9992,"local_y_z":0.0402,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":11,"x":-3.888889,"y":-3.888889,"z":0.0,"A":49.2888,"roll_deg":-179.6859,"pitch_deg":-0.209,"yaw_deg":0.8731,"tilt_deg":0.3773,"forward_x":0.0036,"forward_y":0.0055,"forward_z":-1.0,"local_x_x":0.9999,"local_x_y":0.0152,"local_x_z":0.0036,"local_y_x":0.0153,"local_y_y":-0.9999,"local_y_z":-0.0055,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":12,"x":-3.888889,"y":-2.777778,"z":0.0,"A":51.1694,"roll_deg":178.7912,"pitch_deg":3.2372,"yaw_deg":-0.9877,"tilt_deg":3.4553,"forward_x":-0.0568,"forward_y":-0.0201,"forward_z":-0.9982,"local_x_x":0.9983,"local_x_y":-0.0172,"local_x_z":-0.0565,"local_y_x":-0.016,"local_y_y":-0.9996,"local_y_z":0.0211,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":13,"x":-3.888889,"y":-1.666667,"z":0.0,"A":44.0083,"roll_deg":-173.6708,"pitch_deg":-0.6629,"yaw_deg":-1.8879,"tilt_deg":6.3637,"forward_x":0.0151,"forward_y":0.1098,"forward_z":-0.9938,"local_x_x":0.9994,"local_x_y":-0.0329,"local_x_z":0.0116,"local_y_x":-0.0315,"local_y_y":-0.9934,"local_y_z":-0.1102,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":14,"x":-3.888889,"y":-0.555556,"z":0.0,"A":43.2465,"roll_deg":177.6521,"pitch_deg":-6.7461,"yaw_deg":0.7418,"tilt_deg":7.1413,"forward_x":0.1179,"forward_y":-0.0394,"forward_z":-0.9922,"local_x_x":0.993,"local_x_y":0.0129,"local_x_z":0.1175,"local_y_x":0.0081,"local_y_y":-0.9991,"local_y_z":0.0407,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":15,"x":-3.888889,"y":0.555556,"z":0.0,"A":40.6481,"roll_deg":174.4176,"pitch_deg":9.7792,"yaw_deg":-2.7796,"tilt_deg":11.2469,"forward_x":-0.1736,"forward_y":-0.089,"forward_z":-0.9808,"local_x_x":0.9843,"local_x_y":-0.0478,"local_x_z":-0.1699,"local_y_x":-0.0318,"local_y_y":-0.9949,"local_y_z":0.0959,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":16,"x":-3.888889,"y":1.666667,"z":0.0,"A":53.752,"roll_deg":179.9938,"pitch_deg":0.2023,"yaw_deg":-2.0162,"tilt_deg":0.2024,"forward_x":-0.0035,"forward_y":0.0,"forward_z":-1.0,"local_x_x":0.9994,"local_x_y":-0.0352,"local_x_z":-0.0035,"local_y_x":-0.0352,"local_y_y":-0.9994,"local_y_z":0.0001,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":17,"x":-3.888889,"y":2.777778,"z":0.0,"A":49.8851,"roll_deg":-176.9077,"pitch_deg":2.0427,"yaw_deg":2.114,"tilt_deg":3.7055,"forward_x":-0.0376,"forward_y":0.0526,"forward_z":-0.9979,"local_x_x":0.9987,"local_x_y":0.0369,"local_x_z":-0.0356,"local_y_x":0.0349,"local_y_y":-0.9979,"local_y_z":-0.0539,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":18,"x":-3.888889,"y":3.888889,"z":0.0,"A":49.0318,"roll_deg":179.4703,"pitch_deg":-0.6712,"yaw_deg":2.6543,"tilt_deg":0.855,"forward_x":0.0121,"forward_y":-0.0087,"forward_z":-0.9999,"local_x_x":0.9989,"local_x_y":0.0463,"local_x_z":0.0117,"local_y_x":0.0462,"local_y_y":-0.9989,"local_y_z":0.0092,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":19,"x":-3.888889,"y":5.0,"z":0.0,"A":57.5475,"roll_deg":168.1759,"pitch_deg":-1.4538,"yaw_deg":-1.4367,"tilt_deg":11.9119,"forward_x":0.0197,"forward_y":-0.2055,"forward_z":-0.9785,"local_x_x":0.9994,"local_x_y":-0.0251,"local_x_z":0.0254,"local_y_x":-0.0297,"local_y_y":-0.9783,"local_y_z":0.2048,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":20,"x":-2.777778,"y":-5.0,"z":0.0,"A":51.295,"roll_deg":-177.2256,"pitch_deg":-0.2577,"yaw_deg":-1.7146,"tilt_deg":2.7864,"forward_x":0.0059,"forward_y":0.0482,"forward_z":-0.9988,"local_x_x":0.9995,"local_x_y":-0.0299,"local_x_z":0.0045,"local_y_x":-0.0297,"local_y_y":-0.9984,"local_y_z":-0.0484,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":21,"x":-2.777778,"y":-3.888889,"z":0.0,"A":46.4679,"roll_deg":178.2122,"pitch_deg":0.7705,"yaw_deg":1.6704,"tilt_deg":1.9467,"forward_x":-0.0125,"forward_y":-0.0316,"forward_z":-0.9994,"local_x_x":0.9995,"local_x_y":0.0291,"local_x_z":-0.0134,"local_y_x":0.0296,"local_y_y":-0.9991,"local_y_z":0.0312,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":22,"x":-2.777778,"y":-2.777778,"z":0.0,"A":46.4011,"roll_deg":178.9516,"pitch_deg":2.75,"yaw_deg":1.067,"tilt_deg":2.9429,"forward_x":-0.0476,"forward_y":-0.0192,"forward_z":-0.9987,"local_x_x":0.9987,"local_x_y":0.0186,"local_x_z":-0.048,"local_y_x":0.0195,"local_y_y":-0.9996,"local_y_z":0.0183,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":23,"x":-2.777778,"y":-1.666667,"z":0.0,"A":46.455,"roll_deg":-179.0796,"pitch_deg":1.6704,"yaw_deg":-0.1599,"tilt_deg":1.9072,"forward_x":-0.0291,"forward_y":0.0161,"forward_z":-0.9994,"local_x_x":0.9996,"local_x_y":-0.0028,"local_x_z":-0.0292,"local_y_x":-0.0033,"local_y_y":-0.9999,"local_y_z":-0.0161,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":24,"x":-2.777778,"y":-0.555556,"z":0.0,"A":46.5437,"roll_deg":-178.3133,"pitch_deg":1.1321,"yaw_deg":2.6228,"tilt_deg":2.0313,"forward_x":-0.0211,"forward_y":0.0285,"forward_z":-0.9994,"local_x_x":0.9988,"local_x_y":0.0458,"local_x_z":-0.0198,"local_y_x":0.0452,"local_y_y":-0.9985,"local_y_z":-0.0294,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":25,"x":-2.777778,"y":0.555556,"z":0.0,"A":50.5574,"roll_deg":173.9424,"pitch_deg":-9.4035,"yaw_deg":-1.6367,"tilt_deg":11.1709,"forward_x":0.1594,"forward_y":-0.1101,"forward_z":-0.9811,"local_x_x":0.9862,"local_x_y":-0.0282,"local_x_z":0.1634,"local_y_x":-0.0456,"local_y_y":-0.9935,"local_y_z":0.1041,"a_error":false,"orient_error":true,"problematic":true,"layer":"grid"},{"id":26,"x":-2.777778,"y":1.666667,"z":0.0,"A":51.259,"roll_deg":179.5258,"pitch_deg":2.2666,"yaw_deg":2.4875,"tilt_deg":2.3157,"forward_x":-0.0392,"forward_y":-0.01,"forward_z":-0.9992,"local_x_x":0.9983,"local_x_y":0.0434,"local_x_z":-0.0395,"local_y_x":0.0437,"local_y_y":-0.999,"local_y_z":0.0083,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":27,"x":-2.777778,"y":2.777778,"z":0.0,"A":51.3578,"roll_deg":177.9101,"pitch_deg":-0.8629,"yaw_deg":1.4677,"tilt_deg":2.2609,"forward_x":0.016,"forward_y":-0.0361,"forward_z":-0.9992,"local_x_x":0.9996,"local_x_y":0.0256,"local_x_z":0.0151,"local_y_x":0.025,"local_y_y":-0.999,"local_y_z":0.0365,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":28,"x":-2.777778,"y":3.888889,"z":0.0,"A":51.164,"roll_deg":178.7455,"pitch_deg":-0.0746,"yaw_deg":2.2169,"tilt_deg":1.2567,"forward_x":0.0021,"forward_y":-0.0218,"forward_z":-0.9998,"local_x_x":0.9993,"local_x_y":0.0387,"local_x_z":0.0013,"local_y_x":0.0386,"local_y_y":-0.999,"local_y_z":0.0219,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":29,"x":-2.777778,"y":5.0,"z":0.0,"A":46.0745,"roll_deg":-179.2866,"pitch_deg":1.6841,"yaw_deg":-2.5926,"tilt_deg":1.8289,"forward_x":-0.0288,"forward_y":0.0138,"forward_z":-0.9995,"local_x_x":0.9985,"local_x_y":-0.0452,"local_x_z":-0.0294,"local_y_x":-0.0456,"local_y_y":-0.9989,"local_y_z":-0.0124,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":30,"x":-1.666667,"y":-5.0,"z":0.0,"A":57.9194,"roll_deg":-176.5527,"pitch_deg":-9.1011,"yaw_deg":1.829,"tilt_deg":9.727,"forward_x":0.1559,"forward_y":0.0651,"forward_z":-0.9856,"local_x_x":0.9869,"local_x_y":0.0315,"local_x_z":0.1582,"local_y_x":0.0414,"local_y_y":-0.9974,"local_y_z":-0.0594,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":31,"x":-1.666667,"y":-3.888889,"z":0.0,"A":47.9543,"roll_deg":179.5559,"pitch_deg":-0.289,"yaw_deg":2.5895,"tilt_deg":0.5298,"forward_x":0.0054,"forward_y":-0.0075,"forward_z":-1.0,"local_x_x":0.999,"local_x_y":0.0452,"local_x_z":0.005,"local_y_x":0.0451,"local_y_y":-0.999,"local_y_z":0.0078,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":32,"x":-1.666667,"y":-2.777778,"z":0.0,"A":48.4201,"roll_deg":179.573,"pitch_deg":-1.0569,"yaw_deg":-0.2514,"tilt_deg":1.1399,"forward_x":0.0184,"forward_y":-0.0075,"forward_z":-0.9998,"local_x_x":0.9998,"local_x_y":-0.0044,"local_x_z":0.0184,"local_y_x":-0.0045,"local_y_y":-1.0,"local_y_z":0.0075,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":33,"x":-1.666667,"y":-1.666667,"z":0.0,"A":51.3429,"roll_deg":-176.3176,"pitch_deg":1.3892,"yaw_deg":-0.0846,"tilt_deg":3.9354,"forward_x":-0.0241,"forward_y":0.0643,"forward_z":-0.9976,"local_x_x":0.9997,"local_x_y":-0.0015,"local_x_z":-0.0242,"local_y_x":-0.003,"local_y_y":-0.9979,"local_y_z":-0.0642,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":34,"x":-1.666667,"y":-0.555556,"z":0.0,"A":53.025,"roll_deg":-178.9938,"pitch_deg":1.9772,"yaw_deg":2.4121,"tilt_deg":2.2184,"forward_x":-0.0352,"forward_y":0.0161,"forward_z":-0.9993,"local_x_x":0.9985,"local_x_y":0.0421,"local_x_z":-0.0345,"local_y_x":0.0415,"local_y_y":-0.999,"local_y_z":-0.0176,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":35,"x":-1.666667,"y":0.555556,"z":0.0,"A":47.2436,"roll_deg":-179.345,"pitch_deg":0.8307,"yaw_deg":-1.445,"tilt_deg":1.0579,"forward_x":-0.0142,"forward_y":0.0118,"forward_z":-0.9998,"local_x_x":0.9996,"local_x_y":-0.0252,"local_x_z":-0.0145,"local_y_x":-0.0254,"local_y_y":-0.9996,"local_y_z":-0.0114,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":36,"x":-1.666667,"y":1.666667,"z":0.0,"A":58.5937,"roll_deg":172.5683,"pitch_deg":1.9841,"yaw_deg":0.6914,"tilt_deg":7.6905,"forward_x":-0.0328,"forward_y":-0.1297,"forward_z":-0.991,"local_x_x":0.9993,"local_x_y":0.0121,"local_x_z":-0.0346,"local_y_x":0.0164,"local_y_y":-0.9915,"local_y_z":0.1293,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":37,"x":-1.666667,"y":2.777778,"z":0.0,"A":46.4064,"roll_deg":177.9809,"pitch_deg":-0.1006,"yaw_deg":-2.4469,"tilt_deg":2.0216,"forward_x":0.0002,"forward_y":-0.0353,"forward_z":-0.9994,"local_x_x":0.9991,"local_x_y":-0.0427,"local_x_z":0.0018,"local_y_x":-0.0427,"local_y_y":-0.9985,"local_y_z":0.0352,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":38,"x":-1.666667,"y":3.888889,"z":0.0,"A":48.6685,"roll_deg":-177.7156,"pitch_deg":1.1042,"yaw_deg":2.7811,"tilt_deg":2.5371,"forward_x":-0.0212,"forward_y":0.0389,"forward_z":-0.999,"local_x_x":0.9986,"local_x_y":0.0485,"local_x_z":-0.0193,"local_y_x":0.0477,"local_y_y":-0.9981,"local_y_z":-0.0399,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":39,"x":-1.666667,"y":5.0,"z":0.0,"A":49.5347,"roll_deg":-179.9154,"pitch_deg":0.5164,"yaw_deg":2.0312,"tilt_deg":0.5233,"forward_x":-0.0091,"forward_y":0.0012,"forward_z":-1.0,"local_x_x":0.9993,"local_x_y":0.0354,"local_x_z":-0.009,"local_y_x":0.0354,"local_y_y":-0.9994,"local_y_z":-0.0015,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":40,"x":-0.555556,"y":-5.0,"z":0.0,"A":53.5604,"roll_deg":-179.0514,"pitch_deg":-2.6586,"yaw_deg":2.2826,"tilt_deg":2.8227,"forward_x":0.0457,"forward_y":0.0184,"forward_z":-0.9988,"local_x_x":0.9981,"local_x_y":0.0398,"local_x_z":0.0464,"local_y_x":0.0406,"local_y_y":-0.999,"local_y_z":-0.0165,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":41,"x":-0.555556,"y":-3.888889,"z":0.0,"A":48.9537,"roll_deg":177.8541,"pitch_deg":1.7425,"yaw_deg":2.7194,"tilt_deg":2.7641,"forward_x":-0.0286,"forward_y":-0.0388,"forward_z":-0.9988,"local_x_x":0.9984,"local_x_y":0.0474,"local_x_z":-0.0304,"local_y_x":0.0485,"local_y_y":-0.9981,"local_y_z":0.0374,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":42,"x":-0.555556,"y":-2.777778,"z":0.0,"A":42.8591,"roll_deg":178.9606,"pitch_deg":-1.9505,"yaw_deg":2.7832,"tilt_deg":2.2101,"forward_x":0.0349,"forward_y":-0.0165,"forward_z":-0.9993,"local_x_x":0.9982,"local_x_y":0.0485,"local_x_z":0.034,"local_y_x":0.0479,"local_y_y":-0.9987,"local_y_z":0.0181,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":43,"x":-0.555556,"y":-1.666667,"z":0.0,"A":46.8223,"roll_deg":176.5406,"pitch_deg":0.9813,"yaw_deg":1.4461,"tilt_deg":3.5957,"forward_x":-0.0156,"forward_y":-0.0608,"forward_z":-0.998,"local_x_x":0.9995,"local_x_y":0.0252,"local_x_z":-0.0171,"local_y_x":0.0262,"local_y_y":-0.9978,"local_y_z":0.0603,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":44,"x":-0.555556,"y":-0.555556,"z":0.0,"A":41.707,"roll_deg":-177.8981,"pitch_deg":2.3069,"yaw_deg":0.6463,"tilt_deg":3.1205,"forward_x":-0.0406,"forward_y":0.0362,"forward_z":-0.9985,"local_x_x":0.9991,"local_x_y":0.0113,"local_x_z":-0.0403,"local_y_x":0.0098,"local_y_y":-0.9993,"local_y_z":-0.0366,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":45,"x":-0.555556,"y":0.555556,"z":0.0,"A":52.3991,"roll_deg":176.3228,"pitch_deg":0.4375,"yaw_deg":2.001,"tilt_deg":3.7031,"forward_x":-0.0054,"forward_y":-0.0644,"forward_z":-0.9979,"local_x_x":0.9994,"local_x_y":0.0349,"local_x_z":-0.0076,"local_y_x":0.0353,"local_y_y":-0.9973,"local_y_z":0.0641,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":46,"x":-0.555556,"y":1.666667,"z":0.0,"A":53.3959,"roll_deg":179.6091,"pitch_deg":-0.5906,"yaw_deg":1.9278,"tilt_deg":0.7082,"forward_x":0.0105,"forward_y":-0.0065,"forward_z":-0.9999,"local_x_x":0.9994,"local_x_y":0.0336,"local_x_z":0.0103,"local_y_x":0.0336,"local_y_y":-0.9994,"local_y_z":0.0068,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":47,"x":-0.555556,"y":2.777778,"z":0.0,"A":51.8805,"roll_deg":178.3963,"pitch_deg":-2.6877,"yaw_deg":-0.9435,"tilt_deg":3.1295,"forward_x":0.0464,"forward_y":-0.0288,"forward_z":-0.9985,"local_x_x":0.9988,"local_x_y":-0.0164,"local_x_z":0.0469,"local_y_x":-0.0178,"local_y_y":-0.9995,"local_y_z":0.028,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":48,"x":-0.555556,"y":3.888889,"z":0.0,"A":49.0603,"roll_deg":179.1534,"pitch_deg":0.5183,"yaw_deg":-1.2154,"tilt_deg":0.9927,"forward_x":-0.0094,"forward_y":-0.0146,"forward_z":-0.9998,"local_x_x":0.9997,"local_x_y":-0.0212,"local_x_z":-0.009,"local_y_x":-0.0211,"local_y_y":-0.9997,"local_y_z":0.0148,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":49,"x":-0.555556,"y":5.0,"z":0.0,"A":53.3476,"roll_deg":179.9669,"pitch_deg":-0.1513,"yaw_deg":1.8026,"tilt_deg":0.1549,"forward_x":0.0027,"forward_y":-0.0005,"forward_z":-1.0,"local_x_x":0.9995,"local_x_y":0.0315,"local_x_z":0.0026,"local_y_x":0.0315,"local_y_y":-0.9995,"local_y_z":0.0006,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":50,"x":0.555556,"y":-5.0,"z":0.0,"A":47.7834,"roll_deg":-178.7606,"pitch_deg":0.6482,"yaw_deg":-2.2143,"tilt_deg":1.3986,"forward_x":-0.0105,"forward_y":0.0221,"forward_z":-0.9997,"local_x_x":0.9992,"local_x_y":-0.0386,"local_x_z":-0.0113,"local_y_x":-0.0389,"local_y_y":-0.999,"local_y_z":-0.0216,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":51,"x":0.555556,"y":-3.888889,"z":0.0,"A":46.5554,"roll_deg":178.3771,"pitch_deg":-2.0827,"yaw_deg":1.387,"tilt_deg":2.6401,"forward_x":0.037,"forward_y":-0.0274,"forward_z":-0.9989,"local_x_x":0.999,"local_x_y":0.0242,"local_x_z":0.0363,"local_y_x":0.0232,"local_y_y":-0.9993,"local_y_z":0.0283,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":52,"x":0.555556,"y":-2.777778,"z":0.0,"A":58.5578,"roll_deg":177.5103,"pitch_deg":-1.8363,"yaw_deg":0.0234,"tilt_deg":3.0933,"forward_x":0.032,"forward_y":-0.0434,"forward_z":-0.9985,"local_x_x":0.9995,"local_x_y":0.0004,"local_x_z":0.032,"local_y_x":-0.001,"local_y_y":-0.9991,"local_y_z":0.0434,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":53,"x":0.555556,"y":-1.666667,"z":0.0,"A":56.3036,"roll_deg":177.3692,"pitch_deg":2.683,"yaw_deg":-2.9452,"tilt_deg":3.7569,"forward_x":-0.0491,"forward_y":-0.0434,"forward_z":-0.9979,"local_x_x":0.9976,"local_x_y":-0.0513,"local_x_z":-0.0468,"local_y_x":-0.0492,"local_y_y":-0.9977,"local_y_z":0.0459,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":54,"x":0.555556,"y":-0.555556,"z":0.0,"A":52.2914,"roll_deg":-179.9148,"pitch_deg":-0.1271,"yaw_deg":0.9257,"tilt_deg":0.153,"forward_x":0.0022,"forward_y":0.0015,"forward_z":-1.0,"local_x_x":0.9999,"local_x_y":0.0162,"local_x_z":0.0022,"local_y_x":0.0162,"local_y_y":-0.9999,"local_y_z":-0.0015,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":55,"x":0.555556,"y":0.555556,"z":0.0,"A":53.196,"roll_deg":-179.7575,"pitch_deg":1.7287,"yaw_deg":2.3124,"tilt_deg":1.7456,"forward_x":-0.0303,"forward_y":0.003,"forward_z":-0.9995,"local_x_x":0.9987,"local_x_y":0.0403,"local_x_z":-0.0302,"local_y_x":0.0402,"local_y_y":-0.9992,"local_y_z":-0.0042,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":56,"x":0.555556,"y":1.666667,"z":0.0,"A":50.1594,"roll_deg":179.7956,"pitch_deg":0.7323,"yaw_deg":0.381,"tilt_deg":0.7603,"forward_x":-0.0128,"forward_y":-0.0037,"forward_z":-0.9999,"local_x_x":0.9999,"local_x_y":0.0066,"local_x_z":-0.0128,"local_y_x":0.0067,"local_y_y":-1.0,"local_y_z":0.0036,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":57,"x":0.555556,"y":2.777778,"z":0.0,"A":51.8963,"roll_deg":-176.9692,"pitch_deg":-1.1059,"yaw_deg":-2.7032,"tilt_deg":3.226,"forward_x":0.0217,"forward_y":0.0519,"forward_z":-0.9984,"local_x_x":0.9987,"local_x_y":-0.0472,"local_x_z":0.0193,"local_y_x":-0.0461,"local_y_y":-0.9975,"local_y_z":-0.0529,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":58,"x":0.555556,"y":3.888889,"z":0.0,"A":53.3662,"roll_deg":179.7042,"pitch_deg":-0.7305,"yaw_deg":-2.6893,"tilt_deg":0.7881,"forward_x":0.0125,"forward_y":-0.0058,"forward_z":-0.9999,"local_x_x":0.9988,"local_x_y":-0.0469,"local_x_z":0.0127,"local_y_x":-0.047,"local_y_y":-0.9989,"local_y_z":0.0052,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":59,"x":0.555556,"y":5.0,"z":0.0,"A":53.2004,"roll_deg":-177.9189,"pitch_deg":-1.3722,"yaw_deg":2.2033,"tilt_deg":2.4926,"forward_x":0.0225,"forward_y":0.0372,"forward_z":-0.9991,"local_x_x":0.999,"local_x_y":0.0384,"local_x_z":0.0239,"local_y_x":0.0393,"local_y_y":-0.9986,"local_y_z":-0.0363,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":60,"x":1.666667,"y":-5.0,"z":0.0,"A":51.5777,"roll_deg":-172.204,"pitch_deg":-4.5961,"yaw_deg":0.4208,"tilt_deg":9.0427,"forward_x":0.0784,"forward_y":0.1362,"forward_z":-0.9876,"local_x_x":0.9968,"local_x_y":0.0073,"local_x_z":0.0801,"local_y_x":0.0181,"local_y_y":-0.9907,"local_y_z":-0.1352,"a_error":false,"orient_error":true,"problematic":true,"layer":"grid"},{"id":61,"x":1.666667,"y":-3.888889,"z":0.0,"A":42.7938,"roll_deg":177.9151,"pitch_deg":0.7559,"yaw_deg":-1.0177,"tilt_deg":2.2176,"forward_x":-0.0138,"forward_y":-0.0361,"forward_z":-0.9993,"local_x_x":0.9998,"local_x_y":-0.0178,"local_x_z":-0.0132,"local_y_x":-0.0173,"local_y_y":-0.9992,"local_y_z":0.0364,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":62,"x":1.666667,"y":-2.777778,"z":0.0,"A":46.0032,"roll_deg":177.6666,"pitch_deg":-0.7856,"yaw_deg":-0.2558,"tilt_deg":2.4621,"forward_x":0.0135,"forward_y":-0.0408,"forward_z":-0.9991,"local_x_x":0.9999,"local_x_y":-0.0045,"local_x_z":0.0137,"local_y_x":-0.005,"local_y_y":-0.9992,"local_y_z":0.0407,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":63,"x":1.666667,"y":-1.666667,"z":0.0,"A":51.2376,"roll_deg":179.5192,"pitch_deg":-1.0421,"yaw_deg":-0.4711,"tilt_deg":1.1477,"forward_x":0.0181,"forward_y":-0.0085,"forward_z":-0.9998,"local_x_x":0.9998,"local_x_y":-0.0082,"local_x_z":0.0182,"local_y_x":-0.0084,"local_y_y":-0.9999,"local_y_z":0.0084,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":64,"x":1.666667,"y":-0.555556,"z":0.0,"A":42.3707,"roll_deg":179.2865,"pitch_deg":-1.7177,"yaw_deg":1.7385,"tilt_deg":1.86,"forward_x":0.0303,"forward_y":-0.0115,"forward_z":-0.9995,"local_x_x":0.9991,"local_x_y":0.0303,"local_x_z":0.03,"local_y_x":0.03,"local_y_y":-0.9995,"local_y_z":0.0124,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":65,"x":1.666667,"y":0.555556,"z":0.0,"A":50.9541,"roll_deg":170.2959,"pitch_deg":-2.223,"yaw_deg":-0.6167,"tilt_deg":9.9531,"forward_x":0.0364,"forward_y":-0.169,"forward_z":-0.9849,"local_x_x":0.9992,"local_x_y":-0.0108,"local_x_z":0.0388,"local_y_x":-0.0171,"local_y_y":-0.9856,"local_y_z":0.1684,"a_error":false,"orient_error":true,"problematic":true,"layer":"grid"},{"id":66,"x":1.666667,"y":1.666667,"z":0.0,"A":43.1031,"roll_deg":-177.8582,"pitch_deg":6.2023,"yaw_deg":1.8139,"tilt_deg":6.5603,"forward_x":-0.1091,"forward_y":0.0339,"forward_z":-0.9935,"local_x_x":0.9936,"local_x_y":0.0315,"local_x_z":-0.108,"local_y_x":0.0276,"local_y_y":-0.9989,"local_y_z":-0.0372,"a_error":true,"orient_error":true,"problematic":true,"layer":"grid"},{"id":67,"x":1.666667,"y":2.777778,"z":0.0,"A":50.8902,"roll_deg":179.8028,"pitch_deg":0.5555,"yaw_deg":-2.9054,"tilt_deg":0.5894,"forward_x":-0.0099,"forward_y":-0.0029,"forward_z":-0.9999,"local_x_x":0.9987,"local_x_y":-0.0507,"local_x_z":-0.0097,"local_y_x":-0.0507,"local_y_y":-0.9987,"local_y_z":0.0034,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":68,"x":1.666667,"y":3.888889,"z":0.0,"A":50.6054,"roll_deg":179.2684,"pitch_deg":-2.9857,"yaw_deg":-2.2758,"tilt_deg":3.074,"forward_x":0.0515,"forward_y":-0.0148,"forward_z":-0.9986,"local_x_x":0.9979,"local_x_y":-0.0397,"local_x_z":0.0521,"local_y_x":-0.0404,"local_y_y":-0.9991,"local_y_z":0.0128,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":69,"x":1.666667,"y":5.0,"z":0.0,"A":47.1806,"roll_deg":178.0614,"pitch_deg":-2.1213,"yaw_deg":0.6738,"tilt_deg":2.8734,"forward_x":0.0374,"forward_y":-0.0334,"forward_z":-0.9987,"local_x_x":0.9992,"local_x_y":0.0118,"local_x_z":0.037,"local_y_x":0.0105,"local_y_y":-0.9994,"local_y_z":0.0338,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":70,"x":2.777778,"y":-5.0,"z":0.0,"A":53.0837,"roll_deg":-178.3627,"pitch_deg":2.2104,"yaw_deg":-2.0988,"tilt_deg":2.7505,"forward_x":-0.0375,"forward_y":0.03,"forward_z":-0.9988,"local_x_x":0.9986,"local_x_y":-0.0366,"local_x_z":-0.0386,"local_y_x":-0.0377,"local_y_y":-0.9989,"local_y_z":-0.0286,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":71,"x":2.777778,"y":-3.888889,"z":0.0,"A":51.5673,"roll_deg":176.9278,"pitch_deg":0.507,"yaw_deg":-1.8544,"tilt_deg":3.1137,"forward_x":-0.0106,"forward_y":-0.0533,"forward_z":-0.9985,"local_x_x":0.9994,"local_x_y":-0.0324,"local_x_z":-0.0088,"local_y_x":-0.0318,"local_y_y":-0.9981,"local_y_z":0.0536,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":72,"x":2.777778,"y":-2.777778,"z":0.0,"A":46.9709,"roll_deg":-179.2683,"pitch_deg":-1.7081,"yaw_deg":-2.5257,"tilt_deg":1.8582,"forward_x":0.0303,"forward_y":0.0114,"forward_z":-0.9995,"local_x_x":0.9986,"local_x_y":-0.044,"local_x_z":0.0298,"local_y_x":-0.0437,"local_y_y":-0.999,"local_y_z":-0.0128,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":73,"x":2.777778,"y":-1.666667,"z":0.0,"A":58.0152,"roll_deg":179.8842,"pitch_deg":-0.5206,"yaw_deg":-0.1857,"tilt_deg":0.5334,"forward_x":0.0091,"forward_y":-0.0021,"forward_z":-1.0,"local_x_x":1.0,"local_x_y":-0.0032,"local_x_z":0.0091,"local_y_x":-0.0033,"local_y_y":-1.0,"local_y_z":0.002,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":74,"x":2.777778,"y":-0.555556,"z":0.0,"A":51.7542,"roll_deg":-172.5745,"pitch_deg":9.0674,"yaw_deg":0.5037,"tilt_deg":11.7002,"forward_x":-0.1574,"forward_y":0.1279,"forward_z":-0.9792,"local_x_x":0.9875,"local_x_y":0.0087,"local_x_z":-0.1576,"local_y_x":-0.0116,"local_y_y":-0.9918,"local_y_z":-0.1276,"a_error":false,"orient_error":true,"problematic":true,"layer":"grid"},{"id":75,"x":2.777778,"y":0.555556,"z":0.0,"A":53.1777,"roll_deg":-178.2386,"pitch_deg":0.9873,"yaw_deg":-0.257,"tilt_deg":2.0191,"forward_x":-0.0171,"forward_y":0.0308,"forward_z":-0.9994,"local_x_x":0.9998,"local_x_y":-0.0045,"local_x_z":-0.0172,"local_y_x":-0.005,"local_y_y":-0.9995,"local_y_z":-0.0307,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":76,"x":2.777778,"y":1.666667,"z":0.0,"A":47.9779,"roll_deg":179.4537,"pitch_deg":-2.9241,"yaw_deg":1.4709,"tilt_deg":2.9746,"forward_x":0.0512,"forward_y":-0.0082,"forward_z":-0.9987,"local_x_x":0.9984,"local_x_y":0.0256,"local_x_z":0.051,"local_y_x":0.0252,"local_y_y":-0.9996,"local_y_z":0.0095,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":77,"x":2.777778,"y":2.777778,"z":0.0,"A":51.014,"roll_deg":-177.4625,"pitch_deg":0.2583,"yaw_deg":-0.1165,"tilt_deg":2.5506,"forward_x":-0.0044,"forward_y":0.0443,"forward_z":-0.999,"local_x_x":1.0,"local_x_y":-0.002,"local_x_z":-0.0045,"local_y_x":-0.0022,"local_y_y":-0.999,"local_y_z":-0.0443,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":78,"x":2.777778,"y":3.888889,"z":0.0,"A":48.1737,"roll_deg":179.5079,"pitch_deg":0.982,"yaw_deg":1.2771,"tilt_deg":1.0984,"forward_x":-0.0169,"forward_y":-0.009,"forward_z":-0.9998,"local_x_x":0.9996,"local_x_y":0.0223,"local_x_z":-0.0171,"local_y_x":0.0224,"local_y_y":-0.9997,"local_y_z":0.0086,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":79,"x":2.777778,"y":5.0,"z":0.0,"A":47.8501,"roll_deg":-179.7278,"pitch_deg":-1.2495,"yaw_deg":2.1633,"tilt_deg":1.2788,"forward_x":0.0216,"forward_y":0.0056,"forward_z":-0.9998,"local_x_x":0.999,"local_x_y":0.0377,"local_x_z":0.0218,"local_y_x":0.0379,"local_y_y":-0.9993,"local_y_z":-0.0048,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":80,"x":3.888889,"y":-5.0,"z":0.0,"A":49.2608,"roll_deg":-177.3642,"pitch_deg":-0.8706,"yaw_deg":2.5771,"tilt_deg":2.7758,"forward_x":0.0131,"forward_y":0.0466,"forward_z":-0.9988,"local_x_x":0.9989,"local_x_y":0.045,"local_x_z":0.0152,"local_y_x":0.0456,"local_y_y":-0.9979,"local_y_z":-0.046,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":81,"x":3.888889,"y":-3.888889,"z":0.0,"A":49.3611,"roll_deg":178.8463,"pitch_deg":-1.8385,"yaw_deg":1.7954,"tilt_deg":2.1704,"forward_x":0.0327,"forward_y":-0.0191,"forward_z":-0.9993,"local_x_x":0.999,"local_x_y":0.0313,"local_x_z":0.0321,"local_y_x":0.0307,"local_y_y":-0.9993,"local_y_z":0.0201,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":82,"x":3.888889,"y":-2.777778,"z":0.0,"A":52.8539,"roll_deg":-178.1075,"pitch_deg":-3.0857,"yaw_deg":-1.2739,"tilt_deg":3.6194,"forward_x":0.0545,"forward_y":0.0318,"forward_z":-0.998,"local_x_x":0.9983,"local_x_y":-0.0222,"local_x_z":0.0538,"local_y_x":-0.0204,"local_y_y":-0.9992,"local_y_z":-0.033,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":83,"x":3.888889,"y":-1.666667,"z":0.0,"A":48.8141,"roll_deg":177.7936,"pitch_deg":-2.1242,"yaw_deg":3.0464,"tilt_deg":3.0624,"forward_x":0.039,"forward_y":-0.0365,"forward_z":-0.9986,"local_x_x":0.9979,"local_x_y":0.0531,"local_x_z":0.0371,"local_y_x":0.0517,"local_y_y":-0.9979,"local_y_z":0.0385,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":84,"x":3.888889,"y":-0.555556,"z":0.0,"A":49.3522,"roll_deg":-177.6878,"pitch_deg":1.9337,"yaw_deg":-2.6434,"tilt_deg":3.0139,"forward_x":-0.0318,"forward_y":0.0419,"forward_z":-0.9986,"local_x_x":0.9984,"local_x_y":-0.0461,"local_x_z":-0.0337,"local_y_x":-0.0474,"local_y_y":-0.9981,"local_y_z":-0.0403,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":85,"x":3.888889,"y":0.555556,"z":0.0,"A":47.7643,"roll_deg":-179.1127,"pitch_deg":-2.8555,"yaw_deg":-0.663,"tilt_deg":2.9901,"forward_x":0.05,"forward_y":0.0149,"forward_z":-0.9986,"local_x_x":0.9987,"local_x_y":-0.0116,"local_x_z":0.0498,"local_y_x":-0.0108,"local_y_y":-0.9998,"local_y_z":-0.0155,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":86,"x":3.888889,"y":1.666667,"z":0.0,"A":48.689,"roll_deg":179.6162,"pitch_deg":-0.7893,"yaw_deg":2.8309,"tilt_deg":0.8777,"forward_x":0.0141,"forward_y":-0.006,"forward_z":-0.9999,"local_x_x":0.9987,"local_x_y":0.0494,"local_x_z":0.0138,"local_y_x":0.0493,"local_y_y":-0.9988,"local_y_z":0.0067,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":87,"x":3.888889,"y":2.777778,"z":0.0,"A":49.7391,"roll_deg":178.3839,"pitch_deg":-2.1838,"yaw_deg":2.0706,"tilt_deg":2.7166,"forward_x":0.0391,"forward_y":-0.0268,"forward_z":-0.9989,"local_x_x":0.9986,"local_x_y":0.0361,"local_x_z":0.0381,"local_y_x":0.035,"local_y_y":-0.999,"local_y_z":0.0282,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":88,"x":3.888889,"y":3.888889,"z":0.0,"A":49.1522,"roll_deg":-179.6639,"pitch_deg":-0.3843,"yaw_deg":2.8359,"tilt_deg":0.5105,"forward_x":0.0064,"forward_y":0.0062,"forward_z":-1.0,"local_x_x":0.9988,"local_x_y":0.0495,"local_x_z":0.0067,"local_y_x":0.0495,"local_y_y":-0.9988,"local_y_z":-0.0059,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":89,"x":3.888889,"y":5.0,"z":0.0,"A":47.0856,"roll_deg":179.5837,"pitch_deg":2.2189,"yaw_deg":-0.872,"tilt_deg":2.2576,"forward_x":-0.0388,"forward_y":-0.0067,"forward_z":-0.9992,"local_x_x":0.9991,"local_x_y":-0.0152,"local_x_z":-0.0387,"local_y_x":-0.0149,"local_y_y":-0.9999,"local_y_z":0.0073,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":90,"x":5.0,"y":-5.0,"z":0.0,"A":47.6933,"roll_deg":179.448,"pitch_deg":1.7624,"yaw_deg":0.7081,"tilt_deg":1.8468,"forward_x":-0.0306,"forward_y":-0.01,"forward_z":-0.9995,"local_x_x":0.9995,"local_x_y":0.0124,"local_x_z":-0.0308,"local_y_x":0.0127,"local_y_y":-0.9999,"local_y_z":0.0096,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":91,"x":5.0,"y":-3.888889,"z":0.0,"A":52.0161,"roll_deg":-178.6948,"pitch_deg":0.0756,"yaw_deg":0.7272,"tilt_deg":1.3074,"forward_x":-0.0016,"forward_y":0.0228,"forward_z":-0.9997,"local_x_x":0.9999,"local_x_y":0.0127,"local_x_z":-0.0013,"local_y_x":0.0127,"local_y_y":-0.9997,"local_y_z":-0.0228,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":92,"x":5.0,"y":-2.777778,"z":0.0,"A":46.1551,"roll_deg":176.6738,"pitch_deg":0.0982,"yaw_deg":2.5071,"tilt_deg":3.3277,"forward_x":0.0008,"forward_y":-0.058,"forward_z":-0.9983,"local_x_x":0.999,"local_x_y":0.0437,"local_x_z":-0.0017,"local_y_x":0.0438,"local_y_y":-0.9974,"local_y_z":0.058,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":93,"x":5.0,"y":-1.666667,"z":0.0,"A":51.2012,"roll_deg":-179.9648,"pitch_deg":2.1574,"yaw_deg":0.9009,"tilt_deg":2.1577,"forward_x":-0.0376,"forward_y":0.0,"forward_z":-0.9993,"local_x_x":0.9992,"local_x_y":0.0157,"local_x_z":-0.0376,"local_y_x":0.0157,"local_y_y":-0.9999,"local_y_z":-0.0006,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":94,"x":5.0,"y":-0.555556,"z":0.0,"A":53.5969,"roll_deg":-177.4025,"pitch_deg":-1.7379,"yaw_deg":-1.605,"tilt_deg":3.1249,"forward_x":0.0316,"forward_y":0.0445,"forward_z":-0.9985,"local_x_x":0.9991,"local_x_y":-0.028,"local_x_z":0.0303,"local_y_x":-0.0266,"local_y_y":-0.9986,"local_y_z":-0.0453,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":95,"x":5.0,"y":0.555556,"z":0.0,"A":47.0098,"roll_deg":179.927,"pitch_deg":0.7941,"yaw_deg":2.0845,"tilt_deg":0.7974,"forward_x":-0.0138,"forward_y":-0.0018,"forward_z":-0.9999,"local_x_x":0.9992,"local_x_y":0.0364,"local_x_z":-0.0139,"local_y_x":0.0364,"local_y_y":-0.9993,"local_y_z":0.0013,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":96,"x":5.0,"y":1.666667,"z":0.0,"A":51.5957,"roll_deg":-179.0241,"pitch_deg":-2.4938,"yaw_deg":1.6484,"tilt_deg":2.6778,"forward_x":0.043,"forward_y":0.0183,"forward_z":-0.9989,"local_x_x":0.9986,"local_x_y":0.0287,"local_x_z":0.0435,"local_y_x":0.0295,"local_y_y":-0.9994,"local_y_z":-0.017,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":97,"x":5.0,"y":2.777778,"z":0.0,"A":51.9834,"roll_deg":177.3143,"pitch_deg":1.4828,"yaw_deg":-0.7135,"tilt_deg":3.0676,"forward_x":-0.0264,"forward_y":-0.0465,"forward_z":-0.9986,"local_x_x":0.9996,"local_x_y":-0.0124,"local_x_z":-0.0259,"local_y_x":-0.0112,"local_y_y":-0.9988,"local_y_z":0.0468,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":98,"x":5.0,"y":3.888889,"z":0.0,"A":46.8648,"roll_deg":-179.5945,"pitch_deg":0.2132,"yaw_deg":-2.7869,"tilt_deg":0.4581,"forward_x":-0.0034,"forward_y":0.0072,"forward_z":-1.0,"local_x_x":0.9988,"local_x_y":-0.0486,"local_x_z":-0.0037,"local_y_x":-0.0486,"local_y_y":-0.9988,"local_y_z":-0.0071,"a_error":false,"orient_error":false,"problematic":false,"layer":"grid"},{"id":99,"x":5.0,"y":5.0,"z":0.0,"A":59.8118,"roll_deg":179.9057,"pitch_deg":-0.0407,"yaw_deg":-1.064,"tilt_deg":0.1027,"forward_x":0.0007,"forward_y":-0.0017,"forward_z":-1.0,"local_x_x":0.9998,"local_x_y":-0.0186,"local_x_z":0.0007,"local_y_x":-0.0186,"local_y_y":-0.9998,"local_y_z":0.0016,"a_error":true,"orient_error":false,"problematic":true,"layer":"grid"},{"id":100,"x":-5.0,"y":0.0,"z":3.0,"A":52.6446,"roll_deg":176.4182,"pitch_deg":1.1637,"yaw_deg":-0.6264,"tilt_deg":3.7659,"forward_x":-0.021,"forward_y":-0.0622,"forward_z":-0.9978,"local_x_x":0.9997,"local_x_y":-0.0109,"local_x_z":-0.0203,"local_y_x":-0.0096,"local_y_y":-0.998,"local_y_z":0.0625,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":101,"x":-4.0,"y":-3.0,"z":3.0,"A":41.4208,"roll_deg":-179.0883,"pitch_deg":-0.3354,"yaw_deg":1.1853,"tilt_deg":0.9714,"forward_x":0.0055,"forward_y":0.016,"forward_z":-0.9999,"local_x_x":0.9998,"local_x_y":0.0207,"local_x_z":0.0059,"local_y_x":0.0208,"local_y_y":-0.9997,"local_y_z":-0.0159,"a_error":true,"orient_error":false,"problematic":true,"layer":"circle"},{"id":102,"x":-4.0,"y":-2.0,"z":3.0,"A":50.262,"roll_deg":-178.8568,"pitch_deg":-2.9729,"yaw_deg":2.6913,"tilt_deg":3.1849,"forward_x":0.0509,"forward_y":0.0224,"forward_z":-0.9985,"local_x_x":0.9976,"local_x_y":0.0469,"local_x_z":0.0519,"local_y_x":0.048,"local_y_y":-0.9986,"local_y_z":-0.0199,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":103,"x":-4.0,"y":-1.0,"z":3.0,"A":46.1012,"roll_deg":178.8505,"pitch_deg":2.3835,"yaw_deg":-0.9325,"tilt_deg":2.6461,"forward_x":-0.0419,"forward_y":-0.0194,"forward_z":-0.9989,"local_x_x":0.999,"local_x_y":-0.0163,"local_x_z":-0.0416,"local_y_x":-0.0154,"local_y_y":-0.9997,"local_y_z":0.02,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":104,"x":-4.0,"y":0.0,"z":3.0,"A":48.8975,"roll_deg":179.8849,"pitch_deg":-1.6763,"yaw_deg":0.4021,"tilt_deg":1.6802,"forward_x":0.0293,"forward_y":-0.0018,"forward_z":-0.9996,"local_x_x":0.9995,"local_x_y":0.007,"local_x_z":0.0293,"local_y_x":0.007,"local_y_y":-1.0,"local_y_z":0.002,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":105,"x":-4.0,"y":1.0,"z":3.0,"A":47.4091,"roll_deg":178.9798,"pitch_deg":-3.4174,"yaw_deg":2.1394,"tilt_deg":3.5663,"forward_x":0.0602,"forward_y":-0.0156,"forward_z":-0.9981,"local_x_x":0.9975,"local_x_y":0.0373,"local_x_z":0.0596,"local_y_x":0.0363,"local_y_y":-0.9992,"local_y_z":0.0178,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":106,"x":-4.0,"y":2.0,"z":3.0,"A":53.3569,"roll_deg":-178.2927,"pitch_deg":-1.2005,"yaw_deg":-0.7314,"tilt_deg":2.087,"forward_x":0.0213,"forward_y":0.0295,"forward_z":-0.9993,"local_x_x":0.9997,"local_x_y":-0.0128,"local_x_z":0.021,"local_y_x":-0.0121,"local_y_y":-0.9995,"local_y_z":-0.0298,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":107,"x":-4.0,"y":3.0,"z":3.0,"A":50.7398,"roll_deg":179.4237,"pitch_deg":-3.0445,"yaw_deg":-1.9212,"tilt_deg":3.0986,"forward_x":0.0527,"forward_y":-0.0118,"forward_z":-0.9985,"local_x_x":0.998,"local_x_y":-0.0335,"local_x_z":0.0531,"local_y_x":-0.0341,"local_y_y":-0.9994,"local_y_z":0.01,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":108,"x":-3.0,"y":-4.0,"z":3.0,"A":48.2314,"roll_deg":178.711,"pitch_deg":-0.0222,"yaw_deg":-2.6079,"tilt_deg":1.2892,"forward_x":-0.0006,"forward_y":-0.0225,"forward_z":-0.9997,"local_x_x":0.999,"local_x_y":-0.0455,"local_x_z":0.0004,"local_y_x":-0.0455,"local_y_y":-0.9987,"local_y_z":0.0225,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":109,"x":-3.0,"y":-3.0,"z":3.0,"A":51.3455,"roll_deg":-178.1969,"pitch_deg":0.0186,"yaw_deg":-0.4187,"tilt_deg":1.8032,"forward_x":-0.0001,"forward_y":0.0315,"forward_z":-0.9995,"local_x_x":1.0,"local_x_y":-0.0073,"local_x_z":-0.0003,"local_y_x":-0.0073,"local_y_y":-0.9995,"local_y_z":-0.0315,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":110,"x":-3.0,"y":-2.0,"z":3.0,"A":49.9004,"roll_deg":179.9272,"pitch_deg":-1.3436,"yaw_deg":1.0513,"tilt_deg":1.3456,"forward_x":0.0235,"forward_y":-0.0008,"forward_z":-0.9997,"local_x_x":0.9996,"local_x_y":0.0183,"local_x_z":0.0234,"local_y_x":0.0183,"local_y_y":-0.9998,"local_y_z":0.0013,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":111,"x":-3.0,"y":-1.0,"z":3.0,"A":58.1827,"roll_deg":171.8744,"pitch_deg":-0.2339,"yaw_deg":1.3688,"tilt_deg":8.1289,"forward_x":0.0074,"forward_y":-0.1412,"forward_z":-0.99,"local_x_x":0.9997,"local_x_y":0.0239,"local_x_z":0.0041,"local_y_x":0.0231,"local_y_y":-0.9897,"local_y_z":0.1413,"a_error":true,"orient_error":true,"problematic":true,"layer":"circle"},{"id":112,"x":-3.0,"y":0.0,"z":3.0,"A":47.9308,"roll_deg":-179.8396,"pitch_deg":-2.2174,"yaw_deg":1.8461,"tilt_deg":2.2232,"forward_x":0.0386,"forward_y":0.004,"forward_z":-0.9992,"local_x_x":0.9987,"local_x_y":0.0322,"local_x_z":0.0387,"local_y_x":0.0323,"local_y_y":-0.9995,"local_y_z":-0.0028,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":113,"x":-3.0,"y":1.0,"z":3.0,"A":49.8087,"roll_deg":-179.4891,"pitch_deg":-1.5434,"yaw_deg":1.5438,"tilt_deg":1.6257,"forward_x":0.0267,"forward_y":0.0096,"forward_z":-0.9996,"local_x_x":0.9993,"local_x_y":0.0269,"local_x_z":0.0269,"local_y_x":0.0272,"local_y_y":-0.9996,"local_y_z":-0.0089,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":114,"x":-3.0,"y":2.0,"z":3.0,"A":48.3539,"roll_deg":178.9522,"pitch_deg":-2.6477,"yaw_deg":2.9422,"tilt_deg":2.8474,"forward_x":0.0471,"forward_y":-0.0159,"forward_z":-0.9988,"local_x_x":0.9976,"local_x_y":0.0513,"local_x_z":0.0462,"local_y_x":0.0505,"local_y_y":-0.9986,"local_y_z":0.0183,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":115,"x":-3.0,"y":3.0,"z":3.0,"A":48.9522,"roll_deg":178.3829,"pitch_deg":0.0402,"yaw_deg":-0.9853,"tilt_deg":1.6176,"forward_x":-0.0012,"forward_y":-0.0282,"forward_z":-0.9996,"local_x_x":0.9999,"local_x_y":-0.0172,"local_x_z":-0.0007,"local_y_x":-0.0172,"local_y_y":-0.9995,"local_y_z":0.0282,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":116,"x":-3.0,"y":4.0,"z":3.0,"A":50.4031,"roll_deg":178.2249,"pitch_deg":-1.3233,"yaw_deg":-2.9395,"tilt_deg":2.2139,"forward_x":0.0215,"forward_y":-0.0321,"forward_z":-0.9993,"local_x_x":0.9984,"local_x_y":-0.0513,"local_x_z":0.0231,"local_y_x":-0.052,"local_y_y":-0.9982,"local_y_z":0.031,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":117,"x":-2.0,"y":-4.0,"z":3.0,"A":47.8443,"roll_deg":179.5693,"pitch_deg":-1.3397,"yaw_deg":1.17,"tilt_deg":1.4072,"forward_x":0.0235,"forward_y":-0.007,"forward_z":-0.9997,"local_x_x":0.9995,"local_x_y":0.0204,"local_x_z":0.0234,"local_y_x":0.0202,"local_y_y":-0.9998,"local_y_z":0.0075,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":118,"x":-2.0,"y":-3.0,"z":3.0,"A":53.607,"roll_deg":177.3854,"pitch_deg":-1.2202,"yaw_deg":-1.4028,"tilt_deg":2.8851,"forward_x":0.0201,"forward_y":-0.0461,"forward_z":-0.9987,"local_x_x":0.9995,"local_x_y":-0.0245,"local_x_z":0.0213,"local_y_x":-0.0254,"local_y_y":-0.9986,"local_y_z":0.0456,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":119,"x":-2.0,"y":-2.0,"z":3.0,"A":48.212,"roll_deg":177.3989,"pitch_deg":0.9254,"yaw_deg":-1.4749,"tilt_deg":2.7607,"forward_x":-0.0173,"forward_y":-0.045,"forward_z":-0.9988,"local_x_x":0.9995,"local_x_y":-0.0257,"local_x_z":-0.0161,"local_y_x":-0.025,"local_y_y":-0.9987,"local_y_z":0.0454,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":120,"x":-2.0,"y":-1.0,"z":3.0,"A":53.8441,"roll_deg":-170.4877,"pitch_deg":0.6961,"yaw_deg":-0.4722,"tilt_deg":9.5375,"forward_x":-0.0106,"forward_y":0.1654,"forward_z":-0.9862,"local_x_x":0.9999,"local_x_y":-0.0082,"local_x_z":-0.0121,"local_y_x":-0.0101,"local_y_y":-0.9862,"local_y_z":-0.1652,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":121,"x":-2.0,"y":0.0,"z":3.0,"A":43.1398,"roll_deg":169.3962,"pitch_deg":-2.9263,"yaw_deg":1.3955,"tilt_deg":10.9958,"forward_x":0.0546,"forward_y":-0.1827,"forward_z":-0.9816,"local_x_x":0.9984,"local_x_y":0.0243,"local_x_z":0.0511,"local_y_x":0.0145,"local_y_y":-0.9829,"local_y_z":0.1838,"a_error":true,"orient_error":true,"problematic":true,"layer":"circle"},{"id":122,"x":-2.0,"y":1.0,"z":3.0,"A":51.5793,"roll_deg":-179.8296,"pitch_deg":1.0839,"yaw_deg":-0.3169,"tilt_deg":1.0972,"forward_x":-0.0189,"forward_y":0.0031,"forward_z":-0.9998,"local_x_x":0.9998,"local_x_y":-0.0055,"local_x_z":-0.0189,"local_y_x":-0.0056,"local_y_y":-1.0,"local_y_z":-0.003,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":123,"x":-2.0,"y":2.0,"z":3.0,"A":52.9818,"roll_deg":-179.6281,"pitch_deg":0.3418,"yaw_deg":0.0569,"tilt_deg":0.5051,"forward_x":-0.006,"forward_y":0.0065,"forward_z":-1.0,"local_x_x":1.0,"local_x_y":0.001,"local_x_z":-0.006,"local_y_x":0.001,"local_y_y":-1.0,"local_y_z":-0.0065,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":124,"x":-2.0,"y":3.0,"z":3.0,"A":47.4749,"roll_deg":179.5466,"pitch_deg":-2.2511,"yaw_deg":0.3747,"tilt_deg":2.2963,"forward_x":0.0393,"forward_y":-0.0077,"forward_z":-0.9992,"local_x_x":0.9992,"local_x_y":0.0065,"local_x_z":0.0393,"local_y_x":0.0062,"local_y_y":-0.9999,"local_y_z":0.0079,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":125,"x":-2.0,"y":4.0,"z":3.0,"A":59.1995,"roll_deg":-177.6831,"pitch_deg":5.869,"yaw_deg":0.3701,"tilt_deg":6.3083,"forward_x":-0.1024,"forward_y":0.0398,"forward_z":-0.9939,"local_x_x":0.9947,"local_x_y":0.0064,"local_x_z":-0.1023,"local_y_x":0.0023,"local_y_y":-0.9992,"local_y_z":-0.0402,"a_error":true,"orient_error":true,"problematic":true,"layer":"circle"},{"id":126,"x":-1.0,"y":-4.0,"z":3.0,"A":47.2138,"roll_deg":-179.0503,"pitch_deg":-1.7226,"yaw_deg":-1.1469,"tilt_deg":1.967,"forward_x":0.0304,"forward_y":0.016,"forward_z":-0.9994,"local_x_x":0.9993,"local_x_y":-0.02,"local_x_z":0.0301,"local_y_x":-0.0195,"local_y_y":-0.9997,"local_y_z":-0.0166,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":127,"x":-1.0,"y":-3.0,"z":3.0,"A":47.9855,"roll_deg":-178.8451,"pitch_deg":3.0323,"yaw_deg":2.5469,"tilt_deg":3.2446,"forward_x":-0.0537,"forward_y":0.0178,"forward_z":-0.9984,"local_x_x":0.9976,"local_x_y":0.0444,"local_x_z":-0.0529,"local_y_x":0.0434,"local_y_y":-0.9989,"local_y_z":-0.0201,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":128,"x":-1.0,"y":-2.0,"z":3.0,"A":50.9473,"roll_deg":175.3037,"pitch_deg":-8.0923,"yaw_deg":0.0896,"tilt_deg":9.3484,"forward_x":0.1404,"forward_y":-0.0817,"forward_z":-0.9867,"local_x_x":0.99,"local_x_y":0.0015,"local_x_z":0.1408,"local_y_x":-0.01,"local_y_y":-0.9967,"local_y_z":0.0811,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":129,"x":-1.0,"y":-1.0,"z":3.0,"A":48.3788,"roll_deg":177.9774,"pitch_deg":-2.3534,"yaw_deg":-2.3675,"tilt_deg":3.1028,"forward_x":0.0395,"forward_y":-0.037,"forward_z":-0.9985,"local_x_x":0.9983,"local_x_y":-0.0413,"local_x_z":0.0411,"local_y_x":-0.0427,"local_y_y":-0.9985,"local_y_z":0.0353,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":130,"x":-1.0,"y":0.0,"z":3.0,"A":46.4818,"roll_deg":178.9962,"pitch_deg":-2.1294,"yaw_deg":-0.3743,"tilt_deg":2.3541,"forward_x":0.037,"forward_y":-0.0178,"forward_z":-0.9992,"local_x_x":0.9993,"local_x_y":-0.0065,"local_x_z":0.0372,"local_y_x":-0.0072,"local_y_y":-0.9998,"local_y_z":0.0175,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":131,"x":-1.0,"y":1.0,"z":3.0,"A":58.3148,"roll_deg":172.7154,"pitch_deg":9.258,"yaw_deg":-2.7451,"tilt_deg":11.7607,"forward_x":-0.1655,"forward_y":-0.119,"forward_z":-0.979,"local_x_x":0.9858,"local_x_y":-0.0473,"local_x_z":-0.1609,"local_y_x":-0.0271,"local_y_y":-0.9918,"local_y_z":0.1251,"a_error":true,"orient_error":true,"problematic":true,"layer":"circle"},{"id":132,"x":-1.0,"y":2.0,"z":3.0,"A":46.6005,"roll_deg":177.8458,"pitch_deg":1.5295,"yaw_deg":1.9003,"tilt_deg":2.6417,"forward_x":-0.0254,"forward_y":-0.0385,"forward_z":-0.9989,"local_x_x":0.9991,"local_x_y":0.0331,"local_x_z":-0.0267,"local_y_x":0.0341,"local_y_y":-0.9987,"local_y_z":0.0376,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":133,"x":-1.0,"y":3.0,"z":3.0,"A":48.3301,"roll_deg":179.9968,"pitch_deg":-0.0102,"yaw_deg":-0.5629,"tilt_deg":0.0107,"forward_x":0.0002,"forward_y":-0.0001,"forward_z":-1.0,"local_x_x":1.0,"local_x_y":-0.0098,"local_x_z":0.0002,"local_y_x":-0.0098,"local_y_y":-1.0,"local_y_z":0.0001,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":134,"x":-1.0,"y":4.0,"z":3.0,"A":49.6323,"roll_deg":-172.8331,"pitch_deg":-1.8023,"yaw_deg":-1.4534,"tilt_deg":7.3889,"forward_x":0.0344,"forward_y":0.1239,"forward_z":-0.9917,"local_x_x":0.9992,"local_x_y":-0.0254,"local_x_z":0.0315,"local_y_x":-0.0212,"local_y_y":-0.992,"local_y_z":-0.1247,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":135,"x":0.0,"y":-5.0,"z":3.0,"A":51.0005,"roll_deg":-178.8072,"pitch_deg":2.4775,"yaw_deg":-1.6742,"tilt_deg":2.7495,"forward_x":-0.0426,"forward_y":0.0221,"forward_z":-0.9988,"local_x_x":0.9986,"local_x_y":-0.0292,"local_x_z":-0.0432,"local_y_x":-0.0301,"local_y_y":-0.9993,"local_y_z":-0.0208,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":136,"x":0.0,"y":-4.0,"z":3.0,"A":50.3565,"roll_deg":-178.9089,"pitch_deg":2.4093,"yaw_deg":0.4947,"tilt_deg":2.6447,"forward_x":-0.0422,"forward_y":0.0187,"forward_z":-0.9989,"local_x_x":0.9991,"local_x_y":0.0086,"local_x_z":-0.042,"local_y_x":0.0078,"local_y_y":-0.9998,"local_y_z":-0.019,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":137,"x":0.0,"y":-3.0,"z":3.0,"A":46.5713,"roll_deg":-178.6636,"pitch_deg":2.2194,"yaw_deg":-1.9071,"tilt_deg":2.5905,"forward_x":-0.0379,"forward_y":0.0246,"forward_z":-0.999,"local_x_x":0.9987,"local_x_y":-0.0333,"local_x_z":-0.0387,"local_y_x":-0.0342,"local_y_y":-0.9991,"local_y_z":-0.0233,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":138,"x":0.0,"y":-2.0,"z":3.0,"A":58.0614,"roll_deg":179.3856,"pitch_deg":-0.2511,"yaw_deg":-1.4911,"tilt_deg":0.6637,"forward_x":0.0041,"forward_y":-0.0108,"forward_z":-0.9999,"local_x_x":0.9997,"local_x_y":-0.026,"local_x_z":0.0044,"local_y_x":-0.0261,"local_y_y":-0.9996,"local_y_z":0.0107,"a_error":true,"orient_error":false,"problematic":true,"layer":"circle"},{"id":139,"x":0.0,"y":-1.0,"z":3.0,"A":49.2201,"roll_deg":179.6212,"pitch_deg":-1.7153,"yaw_deg":1.1863,"tilt_deg":1.7566,"forward_x":0.0301,"forward_y":-0.006,"forward_z":-0.9995,"local_x_x":0.9993,"local_x_y":0.0207,"local_x_z":0.0299,"local_y_x":0.0205,"local_y_y":-0.9998,"local_y_z":0.0066,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":140,"x":0.0,"y":0.0,"z":3.0,"A":50.7843,"roll_deg":-179.7361,"pitch_deg":-1.0565,"yaw_deg":0.3685,"tilt_deg":1.089,"forward_x":0.0184,"forward_y":0.0047,"forward_z":-0.9998,"local_x_x":0.9998,"local_x_y":0.0064,"local_x_z":0.0184,"local_y_x":0.0065,"local_y_y":-1.0,"local_y_z":-0.0046,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":141,"x":0.0,"y":1.0,"z":3.0,"A":46.2069,"roll_deg":-176.4555,"pitch_deg":-0.3058,"yaw_deg":-0.6424,"tilt_deg":3.5577,"forward_x":0.006,"forward_y":0.0618,"forward_z":-0.9981,"local_x_x":0.9999,"local_x_y":-0.0112,"local_x_z":0.0053,"local_y_x":-0.0109,"local_y_y":-0.998,"local_y_z":-0.0618,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":142,"x":0.0,"y":2.0,"z":3.0,"A":50.697,"roll_deg":-173.3051,"pitch_deg":-3.097,"yaw_deg":-2.5375,"tilt_deg":7.3735,"forward_x":0.0588,"forward_y":0.1141,"forward_z":-0.9917,"local_x_x":0.9976,"local_x_y":-0.0442,"local_x_z":0.054,"local_y_x":-0.0377,"local_y_y":-0.9925,"local_y_z":-0.1164,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":143,"x":0.0,"y":3.0,"z":3.0,"A":50.61,"roll_deg":-179.9177,"pitch_deg":0.0105,"yaw_deg":-1.9285,"tilt_deg":0.083,"forward_x":-0.0001,"forward_y":0.0014,"forward_z":-1.0,"local_x_x":0.9994,"local_x_y":-0.0337,"local_x_z":-0.0002,"local_y_x":-0.0337,"local_y_y":-0.9994,"local_y_z":-0.0014,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":144,"x":0.0,"y":4.0,"z":3.0,"A":49.5378,"roll_deg":177.2745,"pitch_deg":1.375,"yaw_deg":-0.1793,"tilt_deg":3.0524,"forward_x":-0.0241,"forward_y":-0.0475,"forward_z":-0.9986,"local_x_x":0.9997,"local_x_y":-0.0031,"local_x_z":-0.024,"local_y_x":-0.002,"local_y_y":-0.9989,"local_y_z":0.0475,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":145,"x":0.0,"y":5.0,"z":3.0,"A":52.514,"roll_deg":-179.9712,"pitch_deg":1.1123,"yaw_deg":0.3852,"tilt_deg":1.1126,"forward_x":-0.0194,"forward_y":0.0004,"forward_z":-0.9998,"local_x_x":0.9998,"local_x_y":0.0067,"local_x_z":-0.0194,"local_y_x":0.0067,"local_y_y":-1.0,"local_y_z":-0.0005,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":146,"x":1.0,"y":-4.0,"z":3.0,"A":48.5685,"roll_deg":179.2347,"pitch_deg":-3.8,"yaw_deg":0.5995,"tilt_deg":3.8762,"forward_x":0.0664,"forward_y":-0.0127,"forward_z":-0.9977,"local_x_x":0.9977,"local_x_y":0.0104,"local_x_z":0.0663,"local_y_x":0.0096,"local_y_y":-0.9999,"local_y_z":0.0133,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":147,"x":1.0,"y":-3.0,"z":3.0,"A":57.7296,"roll_deg":179.6476,"pitch_deg":0.2256,"yaw_deg":0.5287,"tilt_deg":0.4184,"forward_x":-0.0039,"forward_y":-0.0062,"forward_z":-1.0,"local_x_x":0.9999,"local_x_y":0.0092,"local_x_z":-0.0039,"local_y_x":0.0093,"local_y_y":-0.9999,"local_y_z":0.0061,"a_error":true,"orient_error":false,"problematic":true,"layer":"circle"},{"id":148,"x":1.0,"y":-2.0,"z":3.0,"A":48.5161,"roll_deg":-179.0047,"pitch_deg":-3.0985,"yaw_deg":0.2169,"tilt_deg":3.2543,"forward_x":0.054,"forward_y":0.0176,"forward_z":-0.9984,"local_x_x":0.9985,"local_x_y":0.0038,"local_x_z":0.0541,"local_y_x":0.0047,"local_y_y":-0.9998,"local_y_z":-0.0173,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":149,"x":1.0,"y":-1.0,"z":3.0,"A":50.1168,"roll_deg":-179.7463,"pitch_deg":1.268,"yaw_deg":0.5804,"tilt_deg":1.2931,"forward_x":-0.0222,"forward_y":0.0042,"forward_z":-0.9997,"local_x_x":0.9997,"local_x_y":0.0101,"local_x_z":-0.0221,"local_y_x":0.01,"local_y_y":-0.9999,"local_y_z":-0.0044,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":150,"x":1.0,"y":0.0,"z":3.0,"A":49.306,"roll_deg":-176.6808,"pitch_deg":-2.1471,"yaw_deg":-0.3803,"tilt_deg":3.9525,"forward_x":0.0378,"forward_y":0.0576,"forward_z":-0.9976,"local_x_x":0.9993,"local_x_y":-0.0066,"local_x_z":0.0375,"local_y_x":-0.0045,"local_y_y":-0.9983,"local_y_z":-0.0579,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":151,"x":1.0,"y":1.0,"z":3.0,"A":51.0033,"roll_deg":179.4404,"pitch_deg":-0.4999,"yaw_deg":-1.5338,"tilt_deg":0.7503,"forward_x":0.0085,"forward_y":-0.01,"forward_z":-0.9999,"local_x_x":0.9996,"local_x_y":-0.0268,"local_x_z":0.0087,"local_y_x":-0.0269,"local_y_y":-0.9996,"local_y_z":0.0098,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":152,"x":1.0,"y":2.0,"z":3.0,"A":59.6745,"roll_deg":169.8482,"pitch_deg":2.923,"yaw_deg":-0.8227,"tilt_deg":10.5599,"forward_x":-0.0527,"forward_y":-0.1755,"forward_z":-0.9831,"local_x_x":0.9986,"local_x_y":-0.0143,"local_x_z":-0.051,"local_y_x":-0.0051,"local_y_y":-0.9844,"local_y_z":0.176,"a_error":true,"orient_error":true,"problematic":true,"layer":"circle"},{"id":153,"x":1.0,"y":3.0,"z":3.0,"A":51.0402,"roll_deg":179.4883,"pitch_deg":-3.4861,"yaw_deg":2.8527,"tilt_deg":3.5234,"forward_x":0.0612,"forward_y":-0.0059,"forward_z":-0.9981,"local_x_x":0.9969,"local_x_y":0.0497,"local_x_z":0.0608,"local_y_x":0.0492,"local_y_y":-0.9987,"local_y_z":0.0089,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":154,"x":1.0,"y":4.0,"z":3.0,"A":46.1094,"roll_deg":-176.9202,"pitch_deg":-0.859,"yaw_deg":1.0908,"tilt_deg":3.1973,"forward_x":0.0139,"forward_y":0.054,"forward_z":-0.9984,"local_x_x":0.9997,"local_x_y":0.019,"local_x_z":0.015,"local_y_x":0.0198,"local_y_y":-0.9984,"local_y_z":-0.0537,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":155,"x":2.0,"y":-4.0,"z":3.0,"A":46.9077,"roll_deg":178.3804,"pitch_deg":0.2004,"yaw_deg":-2.0549,"tilt_deg":1.632,"forward_x":-0.0045,"forward_y":-0.0281,"forward_z":-0.9996,"local_x_x":0.9994,"local_x_y":-0.0359,"local_x_z":-0.0035,"local_y_x":-0.0357,"local_y_y":-0.999,"local_y_z":0.0283,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":156,"x":2.0,"y":-3.0,"z":3.0,"A":53.4612,"roll_deg":-177.0477,"pitch_deg":-2.3748,"yaw_deg":1.9549,"tilt_deg":3.7882,"forward_x":0.0396,"forward_y":0.0529,"forward_z":-0.9978,"local_x_x":0.9986,"local_x_y":0.0341,"local_x_z":0.0414,"local_y_x":0.0362,"local_y_y":-0.998,"local_y_z":-0.0515,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":157,"x":2.0,"y":-2.0,"z":3.0,"A":49.86,"roll_deg":-178.8809,"pitch_deg":-0.3326,"yaw_deg":0.5006,"tilt_deg":1.1674,"forward_x":0.0056,"forward_y":0.0196,"forward_z":-0.9998,"local_x_x":0.9999,"local_x_y":0.0087,"local_x_z":0.0058,"local_y_x":0.0088,"local_y_y":-0.9998,"local_y_z":-0.0195,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":158,"x":2.0,"y":-1.0,"z":3.0,"A":47.5249,"roll_deg":179.4256,"pitch_deg":-1.7995,"yaw_deg":2.1492,"tilt_deg":1.8889,"forward_x":0.0318,"forward_y":-0.0088,"forward_z":-0.9995,"local_x_x":0.9988,"local_x_y":0.0375,"local_x_z":0.0314,"local_y_x":0.0372,"local_y_y":-0.9993,"local_y_z":0.01,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":159,"x":2.0,"y":0.0,"z":3.0,"A":46.5585,"roll_deg":-177.607,"pitch_deg":-0.1469,"yaw_deg":2.1767,"tilt_deg":2.3975,"forward_x":0.001,"forward_y":0.0418,"forward_z":-0.9991,"local_x_x":0.9993,"local_x_y":0.038,"local_x_z":0.0026,"local_y_x":0.0381,"local_y_y":-0.9984,"local_y_z":-0.0418,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":160,"x":2.0,"y":1.0,"z":3.0,"A":59.0447,"roll_deg":-177.5175,"pitch_deg":1.8416,"yaw_deg":1.041,"tilt_deg":3.0907,"forward_x":-0.0329,"forward_y":0.0427,"forward_z":-0.9985,"local_x_x":0.9993,"local_x_y":0.0182,"local_x_z":-0.0321,"local_y_x":0.0168,"local_y_y":-0.9989,"local_y_z":-0.0433,"a_error":true,"orient_error":false,"problematic":true,"layer":"circle"},{"id":161,"x":2.0,"y":2.0,"z":3.0,"A":50.6955,"roll_deg":169.2521,"pitch_deg":-1.9613,"yaw_deg":1.6015,"tilt_deg":10.9233,"forward_x":0.0388,"forward_y":-0.1855,"forward_z":-0.9819,"local_x_x":0.999,"local_x_y":0.0279,"local_x_z":0.0342,"local_y_x":0.0211,"local_y_y":-0.9823,"local_y_z":0.1864,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":162,"x":2.0,"y":3.0,"z":3.0,"A":50.3086,"roll_deg":179.5923,"pitch_deg":-3.9748,"yaw_deg":2.1316,"tilt_deg":3.9956,"forward_x":0.0695,"forward_y":-0.0045,"forward_z":-0.9976,"local_x_x":0.9969,"local_x_y":0.0371,"local_x_z":0.0693,"local_y_x":0.0367,"local_y_y":-0.9993,"local_y_z":0.0071,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":163,"x":2.0,"y":4.0,"z":3.0,"A":49.6428,"roll_deg":-179.5515,"pitch_deg":-1.3056,"yaw_deg":-0.2707,"tilt_deg":1.3805,"forward_x":0.0228,"forward_y":0.0077,"forward_z":-0.9997,"local_x_x":0.9997,"local_x_y":-0.0047,"local_x_z":0.0228,"local_y_x":-0.0045,"local_y_y":-1.0,"local_y_z":-0.0078,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":164,"x":3.0,"y":-4.0,"z":3.0,"A":50.5744,"roll_deg":178.7975,"pitch_deg":0.459,"yaw_deg":-1.1948,"tilt_deg":1.2871,"forward_x":-0.0084,"forward_y":-0.0208,"forward_z":-0.9997,"local_x_x":0.9998,"local_x_y":-0.0209,"local_x_z":-0.008,"local_y_x":-0.0207,"local_y_y":-0.9996,"local_y_z":0.021,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":165,"x":3.0,"y":-3.0,"z":3.0,"A":51.9576,"roll_deg":-179.0717,"pitch_deg":0.1051,"yaw_deg":2.7402,"tilt_deg":0.9342,"forward_x":-0.0026,"forward_y":0.0161,"forward_z":-0.9999,"local_x_x":0.9989,"local_x_y":0.0478,"local_x_z":-0.0018,"local_y_x":0.0478,"local_y_y":-0.9987,"local_y_z":-0.0162,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":166,"x":3.0,"y":-2.0,"z":3.0,"A":51.3095,"roll_deg":-177.3733,"pitch_deg":1.0289,"yaw_deg":0.7313,"tilt_deg":2.8209,"forward_x":-0.0185,"forward_y":0.0456,"forward_z":-0.9988,"local_x_x":0.9998,"local_x_y":0.0128,"local_x_z":-0.018,"local_y_x":0.0119,"local_y_y":-0.9989,"local_y_z":-0.0458,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":167,"x":3.0,"y":-1.0,"z":3.0,"A":46.2962,"roll_deg":-179.6026,"pitch_deg":3.2589,"yaw_deg":0.0506,"tilt_deg":3.283,"forward_x":-0.0569,"forward_y":0.0069,"forward_z":-0.9984,"local_x_x":0.9984,"local_x_y":0.0009,"local_x_z":-0.0568,"local_y_x":0.0005,"local_y_y":-1.0,"local_y_z":-0.0069,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":168,"x":3.0,"y":0.0,"z":3.0,"A":52.9935,"roll_deg":-178.8559,"pitch_deg":-1.6517,"yaw_deg":-2.2507,"tilt_deg":2.0092,"forward_x":0.0296,"forward_y":0.0188,"forward_z":-0.9994,"local_x_x":0.9988,"local_x_y":-0.0393,"local_x_z":0.0288,"local_y_x":-0.0387,"local_y_y":-0.9991,"local_y_z":-0.02,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":169,"x":3.0,"y":1.0,"z":3.0,"A":51.7796,"roll_deg":-179.7217,"pitch_deg":-1.7391,"yaw_deg":0.2499,"tilt_deg":1.7612,"forward_x":0.0303,"forward_y":0.005,"forward_z":-0.9995,"local_x_x":0.9995,"local_x_y":0.0044,"local_x_z":0.0303,"local_y_x":0.0045,"local_y_y":-1.0,"local_y_z":-0.0049,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":170,"x":3.0,"y":2.0,"z":3.0,"A":49.7559,"roll_deg":-178.6789,"pitch_deg":-0.9717,"yaw_deg":2.0517,"tilt_deg":1.6399,"forward_x":0.0161,"forward_y":0.0236,"forward_z":-0.9996,"local_x_x":0.9992,"local_x_y":0.0358,"local_x_z":0.017,"local_y_x":0.0362,"local_y_y":-0.9991,"local_y_z":-0.0231,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":171,"x":3.0,"y":3.0,"z":3.0,"A":51.1987,"roll_deg":169.9934,"pitch_deg":-6.3146,"yaw_deg":-0.0552,"tilt_deg":11.8152,"forward_x":0.1081,"forward_y":-0.1739,"forward_z":-0.9788,"local_x_x":0.9939,"local_x_y":-0.001,"local_x_z":0.11,"local_y_x":-0.0201,"local_y_y":-0.9848,"local_y_z":0.1727,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":172,"x":3.0,"y":4.0,"z":3.0,"A":49.0401,"roll_deg":-177.3491,"pitch_deg":2.1411,"yaw_deg":-2.0579,"tilt_deg":3.4071,"forward_x":-0.0356,"forward_y":0.0476,"forward_z":-0.9982,"local_x_x":0.9987,"local_x_y":-0.0359,"local_x_z":-0.0374,"local_y_x":-0.0376,"local_y_y":-0.9982,"local_y_z":-0.0462,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":173,"x":4.0,"y":-3.0,"z":3.0,"A":52.9791,"roll_deg":-178.7515,"pitch_deg":-0.2135,"yaw_deg":-1.5614,"tilt_deg":1.2666,"forward_x":0.0043,"forward_y":0.0217,"forward_z":-0.9998,"local_x_x":0.9996,"local_x_y":-0.0272,"local_x_z":0.0037,"local_y_x":-0.0272,"local_y_y":-0.9994,"local_y_z":-0.0218,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":174,"x":4.0,"y":-2.0,"z":3.0,"A":53.3674,"roll_deg":179.9384,"pitch_deg":0.1297,"yaw_deg":-0.7871,"tilt_deg":0.1436,"forward_x":-0.0023,"forward_y":-0.001,"forward_z":-1.0,"local_x_x":0.9999,"local_x_y":-0.0137,"local_x_z":-0.0023,"local_y_x":-0.0137,"local_y_y":-0.9999,"local_y_z":0.0011,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":175,"x":4.0,"y":-1.0,"z":3.0,"A":46.7875,"roll_deg":-168.0196,"pitch_deg":-0.3187,"yaw_deg":0.3374,"tilt_deg":11.9846,"forward_x":0.0042,"forward_y":0.2076,"forward_z":-0.9782,"local_x_x":1.0,"local_x_y":0.0059,"local_x_z":0.0056,"local_y_x":0.0069,"local_y_y":-0.9782,"local_y_z":-0.2076,"a_error":false,"orient_error":true,"problematic":true,"layer":"circle"},{"id":176,"x":4.0,"y":0.0,"z":3.0,"A":41.377,"roll_deg":-172.8413,"pitch_deg":6.7139,"yaw_deg":1.1794,"tilt_deg":9.8025,"forward_x":-0.1185,"forward_y":0.1222,"forward_z":-0.9854,"local_x_x":0.9929,"local_x_y":0.0204,"local_x_z":-0.1169,"local_y_x":0.0059,"local_y_y":-0.9923,"local_y_z":-0.1238,"a_error":true,"orient_error":true,"problematic":true,"layer":"circle"},{"id":177,"x":4.0,"y":1.0,"z":3.0,"A":48.9987,"roll_deg":-179.8226,"pitch_deg":0.0488,"yaw_deg":1.24,"tilt_deg":0.184,"forward_x":-0.0009,"forward_y":0.0031,"forward_z":-1.0,"local_x_x":0.9998,"local_x_y":0.0216,"local_x_z":-0.0009,"local_y_x":0.0216,"local_y_y":-0.9998,"local_y_z":-0.0031,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":178,"x":4.0,"y":2.0,"z":3.0,"A":52.3402,"roll_deg":-179.8828,"pitch_deg":-0.5704,"yaw_deg":-0.3967,"tilt_deg":0.5823,"forward_x":0.01,"forward_y":0.002,"forward_z":-0.9999,"local_x_x":0.9999,"local_x_y":-0.0069,"local_x_z":0.01,"local_y_x":-0.0069,"local_y_y":-1.0,"local_y_z":-0.002,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":179,"x":4.0,"y":3.0,"z":3.0,"A":50.9577,"roll_deg":179.6533,"pitch_deg":0.5849,"yaw_deg":-2.2285,"tilt_deg":0.6799,"forward_x":-0.0104,"forward_y":-0.0056,"forward_z":-0.9999,"local_x_x":0.9992,"local_x_y":-0.0389,"local_x_z":-0.0102,"local_y_x":-0.0388,"local_y_y":-0.9992,"local_y_z":0.0061,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"},{"id":180,"x":5.0,"y":0.0,"z":3.0,"A":49.6892,"roll_deg":-179.4679,"pitch_deg":0.803,"yaw_deg":2.1486,"tilt_deg":0.9633,"forward_x":-0.0144,"forward_y":0.0088,"forward_z":-0.9999,"local_x_x":0.9992,"local_x_y":0.0375,"local_x_z":-0.014,"local_y_x":0.0374,"local_y_y":-0.9993,"local_y_z":-0.0093,"a_error":false,"orient_error":false,"problematic":false,"layer":"circle"}]</script>
+<script type="application/json" id="pcv-embed-stats">{"total":181,"problematic":37,"a_error_only":12,"orient_error_only":12,"both_errors":13,"ok":144}</script>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ── state ──────────────────────────────────────────────────────────────────
+let allPoints = [];
+let selectedId = null;
+
+const meshById    = new Map();  // id -> sphere mesh
+const arrowById   = new Map();  // id -> actual-forward arrow group
+const nominalById = new Map();  // id -> nominal -Z ArrowHelper
+const xyProjById  = new Map();  // id -> XY projection ArrowHelper
+
+let triadObject = null;  // ArrowHelper group for the currently selected point
+
+// ── Three.js setup ─────────────────────────────────────────────────────────
+const container = document.getElementById('canvas-container');
+const renderer  = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x0d1117);
+container.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 1000);
+camera.position.set(0, -18, 12);
+camera.up.set(0, 0, 1);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping  = true;
+controls.dampingFactor  = 0.08;
+controls.target.set(0, 0, 1.5);
+controls.update();
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+sunLight.position.set(5, -10, 15);
+scene.add(sunLight);
+
+// ── grid planes ────────────────────────────────────────────────────────────
+const gridGroup = new THREE.Group();
+scene.add(gridGroup);
+[0, 3].forEach(z => {
+  const g = new THREE.GridHelper(12, 12, 0x21262d, 0x21262d);
+  g.rotation.x = Math.PI / 2;
+  g.position.z = z;
+  gridGroup.add(g);
+});
+
+// ── scene groups ───────────────────────────────────────────────────────────
+const pointsGroup  = new THREE.Group();
+const arrowsGroup  = new THREE.Group();
+const nominalGroup = new THREE.Group();
+const xyProjGroup  = new THREE.Group();
+scene.add(pointsGroup, arrowsGroup, nominalGroup, xyProjGroup);
+
+// ── colours ────────────────────────────────────────────────────────────────
+const COL = {
+  ok:   new THREE.Color(0x2ea043),
+  prob: new THREE.Color(0xf85149),
+  aerr: new THREE.Color(0xd29922),
+  oerr: new THREE.Color(0xbc8cff),
+  sel:  new THREE.Color(0x58a6ff),
+};
+
+function pointColor(pt) {
+  if (!pt.problematic) return COL.ok;
+  if (pt.a_error && pt.orient_error) return COL.prob;
+  if (pt.a_error) return COL.aerr;
+  return COL.oerr;
+}
+
+// ── geometry shared ────────────────────────────────────────────────────────
+const sphereGeo = new THREE.SphereGeometry(0.12, 12, 8);
+const NEG_Z     = new THREE.Vector3(0, 0, -1);
+
+// ── arrow builders ─────────────────────────────────────────────────────────
+
+// Thick 3D cylinder arrow — used for the main "actual forward" overlay.
+function buildActualArrow(pt) {
+  const group     = new THREE.Group();
+  const shaftLen  = 0.55;
+  const mat       = new THREE.MeshBasicMaterial({ color: 0xff6b6b });
+  const shaft     = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, shaftLen, 6), mat);
+  shaft.position.y = shaftLen / 2;
+  const cone      = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 6), mat);
+  cone.position.y = shaftLen + 0.1;
+  group.add(shaft, cone);
+
+  const dir = new THREE.Vector3(pt.forward_x, pt.forward_y, pt.forward_z).normalize();
+  group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+  group.position.set(pt.x, pt.y, pt.z);
+  return group;
+}
+
+// Thin ArrowHelper — used for all auxiliary overlays (nominal, XY, triad).
+function makeHelper(dir, origin, length, color, headLen = 0.13, headW = 0.07) {
+  return new THREE.ArrowHelper(dir.normalize(), origin, length, color, headLen, headW);
+}
+
+function buildNominalArrow(pt) {
+  const origin = new THREE.Vector3(pt.x, pt.y, pt.z);
+  const h      = makeHelper(NEG_Z.clone(), origin, 0.65, 0x4a6080);
+  h.userData.ptId = pt.id;
+  return h;
+}
+
+function buildXYArrow(pt) {
+  const fx = pt.forward_x, fy = pt.forward_y;
+  const mag = Math.sqrt(fx * fx + fy * fy);
+  if (mag < 0.025) return null;  // point is nearly vertical — no meaningful azimuth
+  const dir    = new THREE.Vector3(fx / mag, fy / mag, 0);
+  const origin = new THREE.Vector3(pt.x, pt.y, pt.z);
+  const h      = makeHelper(dir, origin, 0.45, 0x00bbcc, 0.11, 0.06);
+  h.userData.ptId = pt.id;
+  return h;
+}
+
+// Full local-frame triad shown only for the selected point.
+// X (red) = local right, Y (green) = local up-ish, Z (blue) = forward.
+// All three arms reveal how roll rotates the frame around the forward axis.
+function buildTriad(pt) {
+  const group  = new THREE.Group();
+  group.position.set(pt.x, pt.y, pt.z);
+  const origin = new THREE.Vector3(0, 0, 0);
+  const L = 0.5, HL = 0.13, HW = 0.07;
+
+  const xDir = new THREE.Vector3(pt.local_x_x, pt.local_x_y, pt.local_x_z);
+  const yDir = new THREE.Vector3(pt.local_y_x, pt.local_y_y, pt.local_y_z);
+  const zDir = new THREE.Vector3(pt.forward_x,  pt.forward_y,  pt.forward_z);
+
+  group.add(makeHelper(xDir, origin, L, 0xff3333, HL, HW));  // X — red
+  group.add(makeHelper(yDir, origin, L, 0x33cc33, HL, HW));  // Y — green
+  group.add(makeHelper(zDir, origin, L, 0x3388ff, HL, HW));  // Z — blue
+  return group;
+}
+
+// ── build scene ────────────────────────────────────────────────────────────
+function buildScene(points) {
+  pointsGroup.clear();
+  arrowsGroup.clear();
+  nominalGroup.clear();
+  xyProjGroup.clear();
+  meshById.clear();
+  arrowById.clear();
+  nominalById.clear();
+  xyProjById.clear();
+
+  for (const pt of points) {
+    const mat  = new THREE.MeshLambertMaterial({ color: pointColor(pt) });
+    const mesh = new THREE.Mesh(sphereGeo, mat);
+    mesh.position.set(pt.x, pt.y, pt.z);
+    mesh.userData.ptId = pt.id;
+    pointsGroup.add(mesh);
+    meshById.set(pt.id, mesh);
+
+    const arrow = buildActualArrow(pt);
+    arrow.userData.ptId = pt.id;
+    arrowsGroup.add(arrow);
+    arrowById.set(pt.id, arrow);
+
+    const nominal = buildNominalArrow(pt);
+    nominalGroup.add(nominal);
+    nominalById.set(pt.id, nominal);
+
+    const xyArrow = buildXYArrow(pt);
+    if (xyArrow) {
+      xyProjGroup.add(xyArrow);
+      xyProjById.set(pt.id, xyArrow);
+    }
+  }
+}
+
+// ── raycaster for picking ──────────────────────────────────────────────────
+const raycaster = new THREE.Raycaster();
+const mouse     = new THREE.Vector2();
+
+renderer.domElement.addEventListener('click', e => {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x =  ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  mouse.y = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(pointsGroup.children);
+  if (hits.length) selectPoint(hits[0].object.userData.ptId);
+});
+
+// ── triad helpers ──────────────────────────────────────────────────────────
+function clearTriad() {
+  if (triadObject) { scene.remove(triadObject); triadObject = null; }
+}
+
+function spawnTriad(pt) {
+  clearTriad();
+  if (document.getElementById('f-triad').checked) {
+    triadObject = buildTriad(pt);
+    scene.add(triadObject);
+  }
+}
+
+// ── selection ─────────────────────────────────────────────────────────────
+function selectPoint(id) {
+  // restore previous selection colour
+  if (selectedId !== null) {
+    const old = allPoints.find(p => p.id === selectedId);
+    if (old) {
+      const m = meshById.get(selectedId);
+      if (m) m.material.color.copy(pointColor(old));
+    }
+    document.querySelectorAll('.point-item').forEach(el => el.classList.remove('selected'));
+  }
+  clearTriad();
+
+  selectedId = id;
+  const pt = allPoints.find(p => p.id === id);
+  if (!pt) return;
+
+  const mesh = meshById.get(id);
+  if (mesh) mesh.material.color.copy(COL.sel);
+
+  spawnTriad(pt);
+
+  const listEl = document.getElementById(`li-${id}`);
+  if (listEl) {
+    listEl.classList.add('selected');
+    listEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  showDetail(pt);
+}
+
+function deselect() {
+  clearTriad();
+  document.getElementById('detail-panel').classList.remove('visible');
+  if (selectedId !== null) {
+    const old = allPoints.find(p => p.id === selectedId);
+    if (old) {
+      const m = meshById.get(selectedId);
+      if (m) m.material.color.copy(pointColor(old));
+    }
+    selectedId = null;
+  }
+  document.querySelectorAll('.point-item').forEach(el => el.classList.remove('selected'));
+}
+
+// ── detail panel ──────────────────────────────────────────────────────────
+function showDetail(pt) {
+  document.getElementById('dp-id').textContent  = `#${pt.id}`;
+  document.getElementById('dp-pos').textContent = `(${pt.x.toFixed(3)}, ${pt.y.toFixed(3)}, ${pt.z.toFixed(3)})`;
+  document.getElementById('dp-layer').textContent = pt.layer;
+
+  const adelta = Math.abs(pt.A - 50.0);
+  const aEl  = document.getElementById('dp-a');
+  const adEl = document.getElementById('dp-adelta');
+  aEl.textContent  = pt.A.toFixed(4);
+  aEl.className    = `dv ${pt.a_error ? 'err' : 'ok'}`;
+  adEl.textContent = adelta.toFixed(4);
+  adEl.className   = `dv ${pt.a_error ? 'err' : 'ok'}`;
+
+  document.getElementById('dp-roll').textContent  = `${pt.roll_deg.toFixed(2)}°`;
+  document.getElementById('dp-pitch').textContent = `${pt.pitch_deg.toFixed(2)}°`;
+  document.getElementById('dp-yaw').textContent   = `${pt.yaw_deg.toFixed(2)}°`;
+
+  const tiltEl = document.getElementById('dp-tilt');
+  tiltEl.textContent = `${pt.tilt_deg.toFixed(2)}°`;
+  tiltEl.className   = `dv ${pt.orient_error ? 'err' : 'ok'}`;
+
+  const flagsEl  = document.getElementById('dp-flags');
+  flagsEl.innerHTML = '';
+  if (!pt.problematic) {
+    flagsEl.innerHTML = '<span class="flag-badge flag-ok">✓ OK</span>';
+  } else {
+    if (pt.a_error)      flagsEl.innerHTML += '<span class="flag-badge flag-a">Score err</span>';
+    if (pt.orient_error) flagsEl.innerHTML += '<span class="flag-badge flag-o">Orient err</span>';
+  }
+
+  document.getElementById('detail-panel').classList.add('visible');
+}
+
+document.getElementById('detail-close').addEventListener('click', deselect);
+
+// ── point list search (axis predicates + free text) ───────────────────────
+const COORD_MATCH_EPS = 1e-4;
+
+/** e.g. x=-2.777778, x -2.777778, y:0, z axis 3 — strip from query for text pass */
+const AXIS_SEARCH_RE = /\b([xyz])\s*(?::|=\s*|axis\s+)?\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)\b/gi;
+
+function parsePointSearchQuery(query) {
+  const predicates = [];
+  const withoutAxes = query.replace(AXIS_SEARCH_RE, (_, axis, numStr) => {
+    predicates.push({ axis: axis.toLowerCase(), value: parseFloat(numStr) });
+    return ' ';
+  });
+  const text = withoutAxes.replace(/\s+/g, ' ').trim();
+  return { predicates, text };
+}
+
+function searchMatchesPoint(pt, queryRaw) {
+  const raw = queryRaw.trim();
+  if (!raw) return true;
+  const { predicates, text } = parsePointSearchQuery(raw);
+  for (const p of predicates) {
+    const coord = p.axis === 'x' ? pt.x : p.axis === 'y' ? pt.y : pt.z;
+    if (!Number.isFinite(p.value) || Math.abs(coord - p.value) > COORD_MATCH_EPS) {
+      return false;
+    }
+  }
+  if (text) {
+    const needle = text.toLowerCase();
+    const hay = `${pt.id} ${pt.x} ${pt.y} ${pt.z} ${pt.layer} ${pt.A}`.toLowerCase();
+    if (!hay.includes(needle)) return false;
+  }
+  return true;
+}
+
+// ── sidebar list ──────────────────────────────────────────────────────────
+function buildList(points) {
+  const listContainer = document.getElementById('point-list');
+  const searchRaw     = document.getElementById('list-search').value;
+  const showOk        = document.getElementById('f-ok').checked;
+  const showProb      = document.getElementById('f-prob').checked;
+
+  const filtered = points.filter(pt => {
+    if (pt.problematic  && !showProb) return false;
+    if (!pt.problematic && !showOk)   return false;
+    if (!searchMatchesPoint(pt, searchRaw)) return false;
+    return true;
+  });
+
+  document.getElementById('list-count').textContent = filtered.length;
+  listContainer.innerHTML = '';
+
+  for (const pt of filtered) {
+    const el = document.createElement('div');
+    el.className = 'point-item' + (pt.id === selectedId ? ' selected' : '');
+    el.id = `li-${pt.id}`;
+
+    const badge = pt.problematic
+      ? '<span class="badge badge-prob">!</span>'
+      : '<span class="badge badge-ok">✓</span>';
+
+    el.innerHTML = `
+      <span class="pid">#${pt.id}</span>
+      <span class="ppos">(${pt.x.toFixed(2)}, ${pt.y.toFixed(2)}, ${pt.z.toFixed(2)})</span>
+      ${badge}
+    `;
+    el.addEventListener('click', () => {
+      selectPoint(pt.id);
+      controls.target.set(pt.x, pt.y, pt.z);
+      controls.update();
+    });
+    listContainer.appendChild(el);
+  }
+}
+
+// ── visibility ─────────────────────────────────────────────────────────────
+function applyVisibility() {
+  const showOk      = document.getElementById('f-ok').checked;
+  const showProb    = document.getElementById('f-prob').checked;
+  const showArrows  = document.getElementById('f-arrows').checked;
+  const showNominal = document.getElementById('f-nominal').checked;
+  const showXY      = document.getElementById('f-xyproj').checked;
+  const searchRaw   = document.getElementById('list-search').value;
+
+  let visible = 0;
+  for (const pt of allPoints) {
+    const showCat = pt.problematic ? showProb : showOk;
+    const show    = showCat && searchMatchesPoint(pt, searchRaw);
+    const mesh    = meshById.get(pt.id);
+    const arrow   = arrowById.get(pt.id);
+    const nominal = nominalById.get(pt.id);
+    const xyArrow = xyProjById.get(pt.id);
+    if (mesh)    mesh.visible    = show;
+    if (arrow)   arrow.visible   = show && showArrows;
+    if (nominal) nominal.visible = show && showNominal;
+    if (xyArrow) xyArrow.visible = show && showXY;
+    if (show) visible++;
+  }
+
+  document.getElementById('hud-visible').textContent = visible;
+  buildList(allPoints);
+}
+
+// ── legend sync ────────────────────────────────────────────────────────────
+function syncLegend() {
+  document.getElementById('leg-nominal').style.display =
+    document.getElementById('f-nominal').checked ? '' : 'none';
+  document.getElementById('leg-xyproj').style.display =
+    document.getElementById('f-xyproj').checked ? '' : 'none';
+  document.getElementById('leg-triad').style.display =
+    document.getElementById('f-triad').checked ? '' : 'none';
+}
+
+// ── event listeners ────────────────────────────────────────────────────────
+
+// Triad checkbox: rebuild/remove triad for current selection immediately.
+document.getElementById('f-triad').addEventListener('change', () => {
+  if (selectedId !== null) {
+    const pt = allPoints.find(p => p.id === selectedId);
+    if (document.getElementById('f-triad').checked && pt) {
+      spawnTriad(pt);
+    } else {
+      clearTriad();
+    }
+  }
+  syncLegend();
+});
+
+// All other display/overlay checkboxes.
+['f-ok', 'f-prob', 'f-grid', 'f-arrows', 'f-nominal', 'f-xyproj'].forEach(cbId => {
+  document.getElementById(cbId).addEventListener('change', () => {
+    gridGroup.visible = document.getElementById('f-grid').checked;
+    applyVisibility();
+    syncLegend();
+  });
+});
+
+document.getElementById('list-search').addEventListener('input', () => applyVisibility());
+
+// ── load data ─────────────────────────────────────────────────────────────
+async function init() {
+  const embPts = document.getElementById('pcv-embed-points');
+  const embSt  = document.getElementById('pcv-embed-stats');
+  const rawPts = embPts?.textContent?.trim() ?? '';
+  let stats;
+
+  if (rawPts) {
+    allPoints = JSON.parse(rawPts);
+    stats = JSON.parse(embSt.textContent.trim());
+  } else {
+    const [pointsRes, statsRes] = await Promise.all([
+      fetch('/api/points'),
+      fetch('/api/stats'),
+    ]);
+    allPoints = await pointsRes.json();
+    stats = await statsRes.json();
+  }
+
+  document.getElementById('s-total').textContent   = stats.total;
+  document.getElementById('s-prob').textContent    = stats.problematic;
+  document.getElementById('s-aerr').textContent    = stats.a_error_only + stats.both_errors;
+  document.getElementById('s-oerr').textContent    = stats.orient_error_only + stats.both_errors;
+  document.getElementById('hud-total').textContent = stats.total;
+
+  buildScene(allPoints);
+  applyVisibility();
+  syncLegend();
+}
+
+init();
+
+// ── resize ─────────────────────────────────────────────────────────────────
+function resize() {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ── render loop ────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

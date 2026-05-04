@@ -1,3 +1,4 @@
 synthetic_points.csv
 __pycache__/
 *.pyc
+.bench_scale_*.csv
