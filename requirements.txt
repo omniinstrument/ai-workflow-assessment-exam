@@ -1,3 +1,0 @@
-# Server for visualize.py (FastAPI + ASGI). generate_data.py / bench_visualize.py use stdlib only.
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0

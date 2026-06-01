@@ -224,45 +224,6 @@ def generate_rows(rng: random.Random) -> list[dict[str, float]]:
     return rows
 
 
-def generate_rows_for_count(count: int, rng: random.Random) -> list[dict[str, float]]:
-    """Build *count* rows with the same error/A/pose rules as the fixed grid, random (x,y,z) in workspace."""
-    half = SQUARE_SIDE / 2.0
-    radius = CIRCLE_DIAMETER / 2.0
-    orientation_error_indices, a_error_indices = assign_error_modes(count, rng)
-    rows: list[dict[str, float]] = []
-    for index in range(count):
-        use_circle_z = rng.random() < 0.45
-        if use_circle_z:
-            z = CIRCLE_Z
-            for _ in range(120):
-                x = round(rng.uniform(-radius, radius), 6)
-                y = round(rng.uniform(-radius, radius), 6)
-                if x * x + y * y <= radius * radius + 1e-9:
-                    break
-            else:
-                x, y = 0.0, 0.0
-        else:
-            z = SQUARE_Z
-            x = round(rng.uniform(-half, half), 6)
-            y = round(rng.uniform(-half, half), 6)
-        roll_deg, pitch_deg, yaw_deg = build_pose(
-            rng,
-            is_orientation_error=index in orientation_error_indices,
-        )
-        rows.append(
-            {
-                "x": x,
-                "y": y,
-                "z": z,
-                "A": build_a_value(rng, is_error=index in a_error_indices),
-                "roll_deg": roll_deg,
-                "pitch_deg": pitch_deg,
-                "yaw_deg": yaw_deg,
-            }
-        )
-    return rows
-
-
 def rotation_matrix_from_euler_zyx(
     roll_deg: float,
     pitch_deg: float,
